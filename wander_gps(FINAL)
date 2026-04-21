@@ -1,0 +1,1772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Vacation Idea Planner</title>
+<link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Inter',sans-serif;background:#f7f3ee;color:#1c1c1e}
+.app{display:flex;flex-direction:column;max-width:1200px;margin:0 auto;height:100vh;min-height:600px;background:#fff;box-shadow:0 4px 32px rgba(0,0,0,.1)}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;gap:12px;padding:12px 20px;background:#1c1c1e;color:#fff;flex-shrink:0;z-index:20}
+.topbar-logo{font-family:'Playfair Display',serif;font-size:18px;font-weight:600;letter-spacing:.01em;color:#fff}
+.topbar-logo span{color:#d4a96a}
+.dot{width:7px;height:7px;border-radius:50%;background:#34d399;flex-shrink:0}
+.dot.busy{background:#fbbf24;animation:blink 1s infinite}
+.dot.err{background:#f87171}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+#statusText{font-size:12px;font-weight:400;color:#a1a1aa}
+#coordsText{margin-left:auto;font-size:11px;color:#71717a;font-family:'Courier New',monospace}
+
+/* BODY */
+.body{display:grid;grid-template-columns:280px 1fr 320px;flex:1;min-height:0;overflow:hidden}
+
+/* LEFT PANEL */
+.side{border-right:1px solid #e5e7eb;display:flex;flex-direction:column;overflow:hidden;background:#fafaf9}
+.sec{padding:14px 15px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.stitle{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin-bottom:10px}
+.weather-hero{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.w-icon{font-size:32px;line-height:1}
+.w-temp{font-family:'Playfair Display',serif;font-size:30px;font-weight:400;color:#1c1c1e}
+.w-sub{font-size:11px;color:#6b7280;margin-top:2px}
+.loc-name{font-size:13px;font-weight:600;color:#374151;margin-bottom:8px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.tile{background:#fff;border-radius:8px;padding:8px 10px;border:1px solid #e5e7eb}
+.tl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af}
+.tv{font-size:13px;font-weight:500;font-family:'Courier New',monospace;margin-top:2px;color:#1c1c1e}
+
+/* VIBES */
+.vibe-chips{display:flex;flex-wrap:wrap;gap:5px;padding:12px 15px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.vchip{font-size:10px;padding:4px 10px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;color:#374151;cursor:pointer;transition:all .15s;white-space:nowrap}
+.vchip:hover{border-color:#9ca3af}
+.vchip.on{background:#1c1c1e;color:#fff;border-color:#1c1c1e}
+
+/* DESTINATION CARDS */
+.dest-scroll{flex:1;overflow-y:auto;padding:10px 12px}
+.dest-card{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:7px;cursor:pointer;transition:all .15s;background:#fff}
+.dest-card:hover{border-color:#9ca3af;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.dest-card.selected{border-color:#d4a96a;background:#fffbf5}
+.dest-card.selected .dname{color:#b45309}
+.dname{font-size:13px;font-weight:600;color:#1c1c1e;margin-bottom:3px}
+.dcountry{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
+.dmeta{font-size:11px;color:#6b7280;line-height:1.5}
+.dtags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.dtag{font-size:9px;padding:2px 7px;border-radius:10px;font-weight:500}
+.dtag-beach{background:#dbeafe;color:#1d4ed8}
+.dtag-adventure{background:#dcfce7;color:#15803d}
+.dtag-culture{background:#fef3c7;color:#92400e}
+.dtag-city{background:#ede9fe;color:#5b21b6}
+.dtag-nature{background:#d1fae5;color:#065f46}
+.dtag-luxury{background:#fce7f3;color:#9d174d}
+.dtag-food{background:#fee2e2;color:#991b1b}
+.nores{font-size:12px;color:#9ca3af;font-style:italic;text-align:center;padding:24px 10px}
+.ghost{color:#9ca3af;font-style:italic}
+
+/* MAP */
+.maincol{display:flex;flex-direction:column;min-height:0;border-right:1px solid #e5e7eb}
+#map{flex:1;min-height:0}
+.attr-bar{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:#fff;border-top:1px solid #e5e7eb;flex-shrink:0;flex-wrap:wrap;gap:6px}
+.legend{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:4px;font-size:10px;color:#6b7280}
+.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.attr-text{font-size:10px;color:#9ca3af}
+.attr-text a{color:#6b7280;text-decoration:none}
+
+/* BOTTOM AI PANEL */
+.btmpanel{padding:12px 15px;border-top:1px solid #e5e7eb;flex-shrink:0;background:#fff}
+.brow{display:flex;gap:7px;margin-bottom:8px}
+button{font-family:'Inter',sans-serif;font-size:12px;font-weight:500;padding:7px 12px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#374151;cursor:pointer;transition:all .15s;white-space:nowrap}
+button:hover:not(:disabled){background:#f9fafb;border-color:#9ca3af}
+button:disabled{opacity:.35;cursor:not-allowed}
+.btn-primary{background:#1c1c1e;color:#fff;border-color:#1c1c1e}
+.btn-primary:hover:not(:disabled){background:#2d2d30;border-color:#2d2d30}
+.btn-gold{background:#d4a96a;color:#fff;border-color:#d4a96a}
+.btn-gold:hover:not(:disabled){background:#c49558;border-color:#c49558}
+.aibox{font-size:12px;color:#374151;line-height:1.7;padding:10px 12px;background:#fafaf9;border-radius:8px;border:1px solid #e5e7eb;min-height:44px}
+.aibox b{color:#1c1c1e;font-weight:600}
+
+/* RIGHT PANEL */
+.rpanel{display:flex;flex-direction:column;overflow:hidden;background:#fff}
+.rtabs{display:flex;border-bottom:1px solid #e5e7eb;flex-shrink:0;background:#fafaf9}
+.rtab{flex:1;padding:10px 4px;font-size:10px;font-weight:600;color:#6b7280;cursor:pointer;text-align:center;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.rtab:hover{color:#374151;background:#f3f4f6}
+.rtab.active{color:#1c1c1e;border-bottom-color:#d4a96a;background:#fff}
+.tab-pane{display:none;flex-direction:column;flex:1;overflow:hidden}
+.tab-pane.active{display:flex}
+
+/* DETAIL TAB */
+.detail-hero{padding:15px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.detail-empty{padding:24px 15px;font-size:12px;color:#9ca3af;text-align:center;font-style:italic}
+.detail-name{font-family:'Playfair Display',serif;font-size:19px;font-weight:600;color:#1c1c1e;margin-bottom:2px}
+.detail-loc{font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.09em;margin-bottom:10px}
+.detail-desc{font-size:12px;color:#4b5563;line-height:1.65;margin-bottom:12px}
+.detail-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+.dstat{background:#fafaf9;border-radius:8px;padding:8px 10px;border:1px solid #e5e7eb}
+.dstat-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:#9ca3af;margin-bottom:2px}
+.dstat-val{font-size:13px;font-weight:600;color:#1c1c1e}
+.detail-score{display:flex;align-items:center;gap:6px;margin-bottom:12px}
+.score-bar{flex:1;height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden}
+.score-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#d4a96a,#b45309)}
+.score-lbl{font-size:11px;font-weight:600;color:#92400e}
+.detail-actions{display:flex;gap:6px;flex-wrap:wrap}
+.detail-ai{padding:12px 15px;border-top:1px solid #e5e7eb;flex-shrink:0}
+.aiinner{font-size:12px;color:#374151;line-height:1.65;padding:10px 12px;background:#fafaf9;border-radius:8px;border:1px solid #e5e7eb;min-height:42px;max-height:140px;overflow-y:auto}
+.aiinner b{color:#1c1c1e;font-weight:600}
+
+/* ITINERARY TAB */
+.itin-header{padding:12px 15px;border-bottom:1px solid #e5e7eb;flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+.itin-scroll{flex:1;overflow-y:auto;padding:10px 12px}
+.itin-card{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:7px;background:#fff;display:flex;align-items:flex-start;gap:10px}
+.itin-num{width:24px;height:24px;border-radius:50%;background:#1c1c1e;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.itin-body{flex:1;min-width:0}
+.itin-name{font-size:12px;font-weight:600;color:#1c1c1e;margin-bottom:2px}
+.itin-meta{font-size:11px;color:#6b7280}
+.itin-remove{cursor:pointer;color:#d1d5db;font-size:16px;line-height:1;flex-shrink:0;padding:2px 4px;border-radius:4px}
+.itin-remove:hover{color:#f87171;background:#fef2f2}
+.itin-empty{font-size:12px;color:#9ca3af;text-align:center;padding:32px 15px;font-style:italic;line-height:1.7}
+.itin-footer{padding:12px 15px;border-top:1px solid #e5e7eb;flex-shrink:0}
+.itin-plan-btn{width:100%;padding:10px;font-size:12px;font-weight:600;border-radius:8px;border:none;background:#1c1c1e;color:#fff;cursor:pointer;font-family:'Inter',sans-serif;transition:opacity .15s}
+.itin-plan-btn:hover{opacity:.82}
+.itin-plan-btn:disabled{opacity:.3;cursor:not-allowed}
+
+/* WEATHER MATCH TAB */
+.wm-header{padding:12px 15px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.wm-scroll{flex:1;overflow-y:auto;padding:10px 12px}
+.wm-card{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:7px;cursor:pointer;background:#fff;transition:all .15s}
+.wm-card:hover{border-color:#d4a96a;background:#fffbf5}
+.wm-card.best{border-color:#34d399;background:#f0fdf4}
+.wm-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:3px}
+.wm-name{font-size:12px;font-weight:600;color:#1c1c1e}
+.wmbadge{font-size:9px;padding:2px 7px;border-radius:8px;font-weight:600}
+.wmbadge-best{background:#dcfce7;color:#15803d}
+.wmbadge-good{background:#dbeafe;color:#1d4ed8}
+.wmbadge-fair{background:#fef3c7;color:#92400e}
+.wm-sub{font-size:11px;color:#6b7280}
+.wm-bar{height:3px;background:#e5e7eb;border-radius:2px;margin-top:6px;overflow:hidden}
+.wm-fill{height:100%;border-radius:2px;transition:width .5s}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:11px;height:11px;border:1.5px solid #d1d5db;border-top-color:#6b7280;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:5px}
+.maplibregl-popup-content{font-family:'Inter',sans-serif;font-size:12px;padding:10px 12px;border-radius:8px;min-width:160px;max-width:240px;line-height:1.5}
+.maplibregl-popup-content b{font-size:13px;display:block;margin-bottom:3px}
+.pmeta-popup{font-size:11px;color:#6b7280;margin-top:2px}
+@media(max-width:900px){.body{grid-template-columns:1fr}.side,.maincol{border-right:none;border-bottom:1px solid #e5e7eb}.rpanel{max-height:400px}}
+
+/* ── RADIUS PLUGIN ── */
+.radius-toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#fffbf5;border-top:1px solid #e5e7eb;flex-shrink:0;flex-wrap:wrap}
+.radius-toolbar label{font-size:11px;color:#6b7280;white-space:nowrap}
+#radiusSlider{flex:1;min-width:80px;max-width:160px;accent-color:#d4a96a;cursor:pointer}
+#radiusVal{font-size:11px;font-weight:600;color:#b45309;min-width:52px;font-family:'Courier New',monospace}
+.btn-radius{background:#d4a96a;color:#fff;border:none;font-size:11px;padding:6px 11px;border-radius:7px;cursor:pointer;font-weight:600;transition:opacity .15s;white-space:nowrap}
+.btn-radius:hover{opacity:.82}
+.btn-radius.active{background:#1c1c1e}
+.btn-radius:disabled{opacity:.35;cursor:not-allowed}
+
+/* RADIUS RESULTS PANEL */
+.radius-panel{position:absolute;bottom:130px;left:50%;transform:translateX(-50%);width:min(460px,90vw);background:#fff;border:1px solid #d4a96a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:100;display:none;flex-direction:column;max-height:320px}
+.radius-panel.open{display:flex}
+.radius-panel-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.radius-panel-title{font-size:13px;font-weight:600;color:#1c1c1e}
+.radius-panel-close{cursor:pointer;font-size:18px;color:#9ca3af;line-height:1;padding:2px 5px;border-radius:4px;border:none;background:none}
+.radius-panel-close:hover{color:#f87171;background:#fef2f2}
+.radius-panel-body{padding:12px 14px;overflow-y:auto;font-size:12px;color:#374151;line-height:1.7}
+.radius-panel-body b{color:#1c1c1e}
+.radius-cat{margin-bottom:10px}
+.radius-cat-title{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#d4a96a;font-weight:700;margin-bottom:4px}
+.radius-idea{padding:5px 8px;background:#fafaf9;border-radius:6px;margin-bottom:3px;border-left:3px solid #d4a96a;font-size:12px}
+
+/* ══════════════════════════════
+   BUDGET TAB STYLES
+══════════════════════════════ */
+.budget-tab-inner{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+
+/* Top controls */
+.budget-controls{padding:12px 15px;border-bottom:1px solid #e5e7eb;flex-shrink:0;background:#fafaf9}
+.budget-controls-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.budget-controls-row:last-child{margin-bottom:0}
+.budget-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;font-weight:600;white-space:nowrap}
+
+/* Traveler type pills */
+.tpill{font-size:10px;padding:4px 10px;border-radius:16px;border:1px solid #e5e7eb;background:#fff;color:#374151;cursor:pointer;transition:all .15s;white-space:nowrap}
+.tpill:hover{border-color:#9ca3af}
+.tpill.on{background:#1c1c1e;color:#fff;border-color:#1c1c1e}
+
+/* Duration input */
+.dur-input{width:52px;padding:4px 7px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;font-family:'Inter',sans-serif;color:#1c1c1e;background:#fff;text-align:center}
+.dur-input:focus{outline:none;border-color:#d4a96a}
+
+/* Destination selector for budget */
+.budget-dest-selector{width:100%;padding:6px 8px;border:1px solid #e5e7eb;border-radius:8px;font-size:11px;font-family:'Inter',sans-serif;color:#1c1c1e;background:#fff;cursor:pointer}
+.budget-dest-selector:focus{outline:none;border-color:#d4a96a}
+
+/* Generate button */
+.budget-gen-btn{width:100%;padding:9px;font-size:12px;font-weight:600;border-radius:8px;border:none;background:linear-gradient(135deg,#d4a96a,#b45309);color:#fff;cursor:pointer;font-family:'Inter',sans-serif;transition:opacity .15s;margin-top:2px}
+.budget-gen-btn:hover{opacity:.85}
+.budget-gen-btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* Budget result area */
+.budget-result{flex:1;overflow-y:auto;padding:12px 15px}
+
+/* Summary card */
+.budget-summary{background:linear-gradient(135deg,#1c1c1e,#2d2d30);border-radius:12px;padding:14px;margin-bottom:12px;color:#fff}
+.budget-summary-dest{font-family:'Playfair Display',serif;font-size:16px;font-weight:600;margin-bottom:4px}
+.budget-summary-meta{font-size:10px;color:#a1a1aa;margin-bottom:10px}
+.budget-total-row{display:flex;justify-content:space-between;align-items:flex-end}
+.budget-total-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#71717a}
+.budget-total-value{font-family:'Playfair Display',serif;font-size:26px;font-weight:600;color:#d4a96a}
+.budget-total-sub{font-size:10px;color:#9ca3af;margin-top:2px}
+
+/* Category breakdown */
+.budget-category{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:7px;background:#fff}
+.budget-cat-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.budget-cat-name{font-size:11px;font-weight:600;color:#1c1c1e;display:flex;align-items:center;gap:5px}
+.budget-cat-total{font-size:12px;font-weight:700;color:#1c1c1e}
+.budget-cat-bar{height:4px;background:#f1f5f9;border-radius:2px;margin-bottom:8px;overflow:hidden}
+.budget-cat-fill{height:100%;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.budget-items{display:flex;flex-direction:column;gap:3px}
+.budget-item{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#4b5563;padding:3px 0;border-bottom:1px solid #f3f4f6}
+.budget-item:last-child{border-bottom:none}
+.budget-item-name{color:#6b7280}
+.budget-item-range{font-weight:600;color:#374151;font-family:'Courier New',monospace;font-size:10px}
+
+/* Tips section */
+.budget-tips{background:#fffbf5;border:1px solid #fde68a;border-radius:10px;padding:11px 13px;margin-top:4px}
+.budget-tips-title{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#d4a96a;font-weight:700;margin-bottom:7px}
+.budget-tip{font-size:11px;color:#4b5563;line-height:1.55;padding:3px 0;border-bottom:1px solid #fef3c7;display:flex;gap:6px}
+.budget-tip:last-child{border-bottom:none}
+
+/* Cost index badge */
+.cost-index{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;font-size:10px;font-weight:600}
+.ci-budget{background:#dcfce7;color:#15803d}
+.ci-moderate{background:#dbeafe;color:#1d4ed8}
+.ci-expensive{background:#fef3c7;color:#92400e}
+.ci-luxury{background:#fce7f3;color:#9d174d}
+
+/* Empty state */
+.budget-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:32px 20px;text-align:center;gap:10px}
+.budget-empty-icon{font-size:36px;opacity:.5}
+.budget-empty-text{font-size:12px;color:#9ca3af;line-height:1.7}
+
+/* Loading skeleton */
+.budget-skeleton{padding:12px 15px}
+.skel{background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px;margin-bottom:8px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* Transport card */
+.budget-transport-card{border:1px solid #fde68a;border-radius:10px;padding:11px 13px;margin-bottom:10px;background:#fffbf5}
+.budget-transport-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px}
+
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="topbar">
+    <div class="dot busy" id="dot"></div>
+    <div class="topbar-logo">wander<span>·ai</span></div>
+    <span id="statusText">Getting your location…</span>
+    <span id="coordsText">—</span>
+  </div>
+
+  <div class="body">
+
+    <!-- LEFT: weather + destination browser -->
+    <div class="side">
+      <div class="sec">
+        <div class="stitle">Your conditions</div>
+        <div id="weatherPanel"><span class="ghost" style="font-size:12px">Waiting for GPS…</span></div>
+      </div>
+      <div class="vibe-chips" id="vibeChips">
+        <span class="vchip on" onclick="setVibe('all',this)">All</span>
+        <span class="vchip" onclick="setVibe('beach',this)">🏖 Beach</span>
+        <span class="vchip" onclick="setVibe('adventure',this)">🧗 Adventure</span>
+        <span class="vchip" onclick="setVibe('culture',this)">🏛 Culture</span>
+        <span class="vchip" onclick="setVibe('city',this)">🌆 City</span>
+        <span class="vchip" onclick="setVibe('nature',this)">🌿 Nature</span>
+        <span class="vchip" onclick="setVibe('luxury',this)">✨ Luxury</span>
+        <span class="vchip" onclick="setVibe('food',this)">🍜 Food</span>
+      </div>
+      <div class="dest-scroll" id="destList">
+        <div class="nores">Loading destinations…</div>
+      </div>
+    </div>
+
+    <!-- CENTER: map -->
+    <div class="maincol" style="position:relative">
+      <div id="map"></div>
+
+      <!-- Floating radius results panel -->
+      <div class="radius-panel" id="radiusPanel">
+        <div class="radius-panel-head">
+          <div class="radius-panel-title">📍 Local Area Ideas <span id="radiusPanelSub" style="font-size:10px;color:#9ca3af;font-weight:400"></span></div>
+          <button class="radius-panel-close" onclick="closeRadiusPanel()">×</button>
+        </div>
+        <div class="radius-panel-body" id="radiusPanelBody"><span class="ghost">Generating ideas…</span></div>
+      </div>
+
+      <div class="attr-bar">
+        <div class="legend">
+          <div class="li"><div class="ld" style="background:#1d4ed8"></div>Beach</div>
+          <div class="li"><div class="ld" style="background:#15803d"></div>Nature</div>
+          <div class="li"><div class="ld" style="background:#7c3aed"></div>Culture</div>
+          <div class="li"><div class="ld" style="background:#d4a96a"></div>City</div>
+          <div class="li"><div class="ld" style="background:#e11d48"></div>Adventure</div>
+        </div>
+        <div class="attr-text">© <a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> © <a href="https://openstreetmap.org/copyright" target="_blank">OSM</a></div>
+      </div>
+      <!-- RADIUS PLUGIN TOOLBAR -->
+      <div class="radius-toolbar">
+        <label>🔍 Local radius:</label>
+        <input type="range" id="radiusSlider" min="5" max="150" value="25" step="5" oninput="updateRadiusLabel()">
+        <span id="radiusVal">25 mi</span>
+        <button class="btn-radius" id="radiusBtn" onclick="toggleRadiusMode()" disabled>Draw radius</button>
+        <button class="btn-radius" id="radiusClearBtn" onclick="clearRadius()" style="background:#6b7280;display:none">Clear</button>
+      </div>
+      <div class="btmpanel">
+        <div class="stitle" style="margin-bottom:7px">AI vacation advisor</div>
+        <div class="brow">
+          <button class="btn-primary" id="aiBtn" onclick="runVacationAI()" disabled>✦ Recommend for my weather</button>
+          <button id="refreshBtn" onclick="startTracking()" disabled>↺ Refresh</button>
+        </div>
+        <div class="aibox" id="aiBox"><span class="ghost">Allow location access to get weather-matched vacation ideas.</span></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: tabs -->
+    <div class="rpanel">
+      <div class="rtabs">
+        <div class="rtab active" onclick="switchTab('detail',this)">📍 Destination</div>
+        <div class="rtab" onclick="switchTab('itinerary',this)">🗺 My Trip</div>
+        <div class="rtab" onclick="switchTab('match',this)">🌤 Weather</div>
+        <div class="rtab" onclick="switchTab('budget',this)">💰 Budget</div>
+      </div>
+
+      <!-- DETAIL TAB -->
+      <div class="tab-pane active" id="tab-detail">
+        <div id="detailContent">
+          <div class="detail-empty">Select a destination on the map or list to see details and AI activity ideas.</div>
+        </div>
+        <div class="detail-ai" id="detailAi" style="display:none">
+          <div class="stitle" style="margin-bottom:5px">AI activity ideas</div>
+          <div class="aiinner" id="destAiBox"><span class="ghost">Select a destination first.</span></div>
+        </div>
+      </div>
+
+      <!-- ITINERARY TAB -->
+      <div class="tab-pane" id="tab-itinerary">
+        <div class="itin-header">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#1c1c1e">My Trip</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:1px" id="itinCount">No destinations added yet</div>
+          </div>
+          <button style="font-size:10px;padding:5px 9px;color:#9ca3af" onclick="clearItinerary()">Clear all</button>
+        </div>
+        <div class="itin-scroll" id="itinList">
+          <div class="itin-empty">Add destinations from the map or list.<br>Then generate a full AI itinerary!</div>
+        </div>
+        <div class="itin-footer">
+          <button class="itin-plan-btn" id="planBtn" disabled onclick="generateFullItinerary()">✦ Generate full AI itinerary</button>
+        </div>
+      </div>
+
+      <!-- WEATHER MATCH TAB -->
+      <div class="tab-pane" id="tab-match">
+        <div class="wm-header">
+          <div style="font-size:13px;font-weight:600;color:#1c1c1e">Weather-matched picks</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px" id="wmSubtitle">Based on your current conditions</div>
+        </div>
+        <div class="wm-scroll" id="wmList">
+          <div class="nores">Waiting for your location to score destinations…</div>
+        </div>
+      </div>
+
+      <!-- BUDGET TAB -->
+      <div class="tab-pane" id="tab-budget">
+        <div class="budget-controls">
+          <div class="budget-controls-row">
+            <span class="budget-label">Destination</span>
+          </div>
+          <div class="budget-controls-row">
+            <select class="budget-dest-selector" id="budgetDestSelect" onchange="onBudgetDestChange()">
+              <option value="">— Select a destination —</option>
+            </select>
+          </div>
+          <div class="budget-controls-row" style="margin-top:6px">
+            <span class="budget-label">Traveler type</span>
+          </div>
+          <div class="budget-controls-row">
+            <span class="tpill on" onclick="setBudgetType('budget',this)">🎒 Budget</span>
+            <span class="tpill" onclick="setBudgetType('mid',this)">🏨 Mid-range</span>
+            <span class="tpill" onclick="setBudgetType('luxury',this)">✨ Luxury</span>
+          </div>
+          <div class="budget-controls-row" style="margin-top:6px">
+            <span class="budget-label">Trip length</span>
+            <input type="number" class="dur-input" id="budgetDays" value="7" min="1" max="30" oninput="clampDays()">
+            <span style="font-size:11px;color:#6b7280">days</span>
+            <span class="budget-label" style="margin-left:8px">Travelers</span>
+            <input type="number" class="dur-input" id="budgetPeople" value="2" min="1" max="10">
+            <span style="font-size:11px;color:#6b7280">ppl</span>
+          </div>
+          <button class="budget-gen-btn" id="budgetGenBtn" onclick="generateBudget()" disabled>💰 Estimate my budget</button>
+        </div>
+
+        <div class="budget-tab-inner" id="budgetResultArea">
+          <div class="budget-empty">
+            <div class="budget-empty-icon">💸</div>
+            <div class="budget-empty-text">Select a destination and click<br><strong>Estimate my budget</strong> to see<br>average costs broken down by category.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<script>
+/* ═══════════════════════════════
+   DESTINATIONS DATABASE
+═══════════════════════════════ */
+const DESTINATIONS = [
+  // ── NORTH AMERICA ──
+  {id:1,name:"Maui",country:"Hawaii, USA",lat:20.798,lon:-156.331,tags:["beach","nature","luxury"],best:"Apr–Oct",budget:"$$$",days:"7–10",climate:"Tropical",gem:false,desc:"Volcanic peaks meet white-sand beaches. Road to Hana, Haleakalā crater, and snorkeling with sea turtles.",pinColor:"#1d4ed8"},
+  {id:9,name:"Banff",country:"Alberta, Canada",lat:51.178,lon:-115.570,tags:["nature","adventure"],best:"Jun–Sep",climate:"Continental",budget:"$$",days:"5–7",gem:false,desc:"Turquoise glacial lakes, Rocky Mountain peaks, wildlife corridors, and the iconic Icefields Parkway.",pinColor:"#15803d"},
+  {id:12,name:"Costa Rica",country:"Central America",lat:9.748,lon:-83.753,tags:["nature","adventure","beach"],best:"Dec–Apr",budget:"$$",days:"8–12",climate:"Tropical",gem:false,desc:"Cloud forests, zip-lining, sloths, active volcanoes, and two coastlines of surf-ready waves.",pinColor:"#15803d"},
+  {id:21,name:"Sedona",country:"Arizona, USA",lat:34.869,lon:-111.761,tags:["nature","adventure","culture"],best:"Mar–May, Sep–Nov",budget:"$$",days:"3–5",climate:"Desert",gem:true,desc:"Red-rock buttes, vortex hiking trails, spiritual retreats, and some of the darkest skies in the Southwest.",pinColor:"#e11d48"},
+  {id:22,name:"Asheville",country:"North Carolina, USA",lat:35.595,lon:-82.551,tags:["culture","food","nature"],best:"Apr–Oct",budget:"$",days:"3–5",climate:"Humid continental",gem:true,desc:"Blue Ridge Parkway drives, craft brewery scene, the Biltmore Estate, and a thriving arts district.",pinColor:"#d4a96a"},
+  {id:23,name:"Moab",country:"Utah, USA",lat:38.573,lon:-109.549,tags:["adventure","nature"],best:"Mar–May, Sep–Oct",budget:"$",days:"4–6",climate:"Desert",gem:true,desc:"Arches and Canyonlands at golden hour, mountain biking the slickrock, and Colorado River rafting.",pinColor:"#e11d48"},
+  {id:24,name:"Tofino",country:"British Columbia, Canada",lat:49.153,lon:-125.907,tags:["beach","nature","adventure"],best:"May–Sep",budget:"$$",days:"4–6",climate:"Oceanic",gem:true,desc:"Wild Pacific surf, old-growth rainforest, grey whale watching, and some of Canada's best seafood.",pinColor:"#15803d"},
+  {id:25,name:"Oaxaca",country:"Mexico",lat:17.067,lon:-96.721,tags:["culture","food","city"],best:"Oct–Apr",budget:"$",days:"5–7",climate:"Semi-arid",gem:true,desc:"Mezcal distilleries, tlayudas, ancient Zapotec ruins at Monte Albán, and Day of the Dead celebrations.",pinColor:"#7c3aed"},
+  {id:26,name:"New Orleans",country:"Louisiana, USA",lat:29.951,lon:-90.071,tags:["city","food","culture"],best:"Feb–May",budget:"$$",days:"4–6",climate:"Humid subtropical",gem:false,desc:"Jazz on Frenchmen Street, beignets at Café Du Monde, voodoo history, and the most unique food city in America.",pinColor:"#d4a96a"},
+  {id:27,name:"Savannah",country:"Georgia, USA",lat:32.084,lon:-81.099,tags:["city","culture","food"],best:"Mar–May, Sep–Nov",budget:"$",days:"3–4",climate:"Humid subtropical",gem:true,desc:"Spanish moss-draped squares, antebellum mansions, ghost tours, and low-country boil on the waterfront.",pinColor:"#7c3aed"},
+  {id:28,name:"Mendocino",country:"California, USA",lat:39.305,lon:-123.799,tags:["nature","beach","food"],best:"Jun–Oct",budget:"$$",days:"3–4",climate:"Mediterranean",gem:true,desc:"Dramatic cliffside headlands, redwood groves, farm-to-table dining, and art galleries in a Victorian village.",pinColor:"#15803d"},
+  {id:29,name:"Bend",country:"Oregon, USA",lat:44.058,lon:-121.315,tags:["adventure","nature","food"],best:"Jun–Sep",budget:"$",days:"3–5",climate:"High desert",gem:true,desc:"Volcano hiking, whitewater kayaking, world-class craft beer, and ski runs on Mt. Bachelor.",pinColor:"#e11d48"},
+  // ── EUROPE ──
+  {id:4,name:"Amalfi Coast",country:"Italy",lat:40.634,lon:14.602,tags:["beach","culture","food","luxury"],best:"May–Jun, Sep",budget:"$$$",days:"5–8",climate:"Mediterranean",gem:false,desc:"Clifftop villages draped in bougainvillea, cerulean coves, and the world's finest limoncello.",pinColor:"#1d4ed8"},
+  {id:5,name:"Marrakech",country:"Morocco",lat:31.629,lon:-7.981,tags:["culture","food","city"],best:"Mar–May, Sep–Nov",budget:"$",days:"4–6",climate:"Semi-arid",gem:false,desc:"A sensory explosion of souks, riads, hammams, and spice markets. Gateway to the Sahara.",pinColor:"#7c3aed"},
+  {id:7,name:"Barcelona",country:"Spain",lat:41.385,lon:2.173,tags:["city","beach","culture","food"],best:"May–Jun, Sep",budget:"$$",days:"4–6",climate:"Mediterranean",gem:false,desc:"Gaudí's impossible architecture, world-class tapas, beaches, and nightlife that starts at midnight.",pinColor:"#d4a96a"},
+  {id:13,name:"Lisbon",country:"Portugal",lat:38.716,lon:-9.139,tags:["city","culture","food"],best:"Apr–Jun, Sep–Oct",budget:"$",days:"4–6",climate:"Mediterranean",gem:false,desc:"Trams rattling through hilly neighborhoods, pastéis de nata, Fado music, and Europe's best-value capital.",pinColor:"#d4a96a"},
+  {id:15,name:"Paros",country:"Greece",lat:37.087,lon:25.145,tags:["beach","food"],best:"Jun–Sep",budget:"$$",days:"5–7",climate:"Mediterranean",gem:true,desc:"The Cyclades secret: calm turquoise waters, charming fishing villages, and windmills without Santorini's crowds.",pinColor:"#1d4ed8"},
+  {id:16,name:"Swiss Alps",country:"Switzerland",lat:46.818,lon:8.228,tags:["adventure","nature","luxury"],best:"Jun–Sep, Dec–Mar",budget:"$$$$",days:"7–10",climate:"Alpine",gem:false,desc:"Train journeys through peaks, Grindelwald ski runs, glacier hiking, and the Matterhorn at golden hour.",pinColor:"#e11d48"},
+  {id:18,name:"Iceland",country:"North Atlantic",lat:64.963,lon:-19.021,tags:["nature","adventure"],best:"Jun–Aug, Nov–Feb",budget:"$$$",days:"7–10",climate:"Subarctic",gem:false,desc:"Northern Lights, midnight sun, geysers, black-sand beaches, whale watching, and natural hot springs.",pinColor:"#15803d"},
+  {id:30,name:"Kotor",country:"Montenegro",lat:42.424,lon:18.771,tags:["culture","nature","beach"],best:"May–Sep",budget:"$",days:"4–6",climate:"Mediterranean",gem:true,desc:"Walled medieval city inside a fjord-like bay, cat-filled alleys, and Venetian fortifications above turquoise water.",pinColor:"#7c3aed"},
+  {id:31,name:"Faroe Islands",country:"Denmark",lat:62.009,lon:-6.791,tags:["nature","adventure"],best:"Jun–Aug",budget:"$$$",days:"5–7",climate:"Subarctic oceanic",gem:true,desc:"Grass-roofed villages on sea cliffs, puffin colonies, dramatic waterfalls plunging into the North Atlantic.",pinColor:"#15803d"},
+  {id:32,name:"Sintra",country:"Portugal",lat:38.797,lon:-9.390,tags:["culture","nature","city"],best:"Apr–Oct",budget:"$",days:"2–3",climate:"Mediterranean",gem:true,desc:"Fairy-tale palaces perched on forested hilltops just 30 minutes from Lisbon — wildly underrated.",pinColor:"#7c3aed"},
+  {id:33,name:"Plovdiv",country:"Bulgaria",lat:42.150,lon:24.750,tags:["culture","city","food"],best:"Apr–Oct",budget:"$",days:"3–5",climate:"Humid continental",gem:true,desc:"Europe's oldest city: Roman amphitheaters, colorful Ottoman-era houses, and a booming craft beer and art scene.",pinColor:"#d4a96a"},
+  {id:34,name:"Valletta",country:"Malta",lat:35.900,lon:14.514,tags:["culture","city","beach"],best:"Apr–Jun, Sep–Oct",budget:"$",days:"3–5",climate:"Mediterranean",gem:true,desc:"Europe's smallest capital, dense with Baroque grandeur, knights' hospitals, and crystalline harbor swimming.",pinColor:"#7c3aed"},
+  {id:35,name:"Tromsø",country:"Norway",lat:69.649,lon:18.956,tags:["adventure","nature"],best:"Nov–Mar, Jun–Jul",budget:"$$$",days:"4–6",climate:"Subarctic",gem:true,desc:"Northern Lights capital of the world, husky sledding, reindeer encounters, and midnight-sun hikes in summer.",pinColor:"#15803d"},
+  // ── ASIA & PACIFIC ──
+  {id:2,name:"Kyoto",country:"Japan",lat:35.011,lon:135.768,tags:["culture","city","food"],best:"Mar–May, Oct–Nov",budget:"$$",days:"5–7",climate:"Temperate",gem:false,desc:"Temple gardens, geisha districts, matcha ceremonies, and bamboo groves. A living museum of Japanese tradition.",pinColor:"#7c3aed"},
+  {id:6,name:"Queenstown",country:"New Zealand",lat:-45.031,lon:168.663,tags:["adventure","nature"],best:"Dec–Feb",budget:"$$",days:"5–7",climate:"Oceanic",gem:false,desc:"The adventure capital of the world. Bungee, skydiving, skiing, and fjord cruises at the base of the Remarkables.",pinColor:"#e11d48"},
+  {id:8,name:"Maldives",country:"Indian Ocean",lat:4.175,lon:73.509,tags:["beach","luxury"],best:"Nov–Apr",budget:"$$$$",days:"7–10",climate:"Tropical",gem:false,desc:"Overwater bungalows above crystal lagoons. The world's flattest country is its most dreamy.",pinColor:"#1d4ed8"},
+  {id:10,name:"Tokyo",country:"Japan",lat:35.689,lon:139.692,tags:["city","culture","food"],best:"Mar–May, Sep–Nov",budget:"$$",days:"7–10",climate:"Humid subtropical",gem:false,desc:"The world's greatest megacity: ramen bars, robot restaurants, ancient shrines, and cutting-edge fashion.",pinColor:"#d4a96a"},
+  {id:14,name:"Bali",country:"Indonesia",lat:-8.409,lon:115.189,tags:["culture","beach","food","nature"],best:"Apr–Oct",budget:"$",days:"7–12",climate:"Tropical",gem:false,desc:"Rice terraces, Hindu temples, surf breaks, jungle waterfalls, and world-famous sunset cocktails.",pinColor:"#7c3aed"},
+  {id:19,name:"Vietnam",country:"Southeast Asia",lat:15.870,lon:107.992,tags:["culture","food","nature"],best:"Feb–Apr",budget:"$",days:"10–14",climate:"Tropical",gem:false,desc:"Ha Long Bay's emerald waters, Hội An's lantern-lit streets, Hà Nội's chaos, and pho for breakfast every day.",pinColor:"#d4a96a"},
+  {id:36,name:"Noto Peninsula",country:"Japan",lat:37.270,lon:137.122,tags:["culture","food","nature"],best:"Apr–Oct",budget:"$$",days:"4–6",climate:"Temperate",gem:true,desc:"Rural Japan at its purest: lacquerware workshops, rugged Sea of Japan coastline, and salt-fields at sunrise.",pinColor:"#7c3aed"},
+  {id:37,name:"Palawan",country:"Philippines",lat:9.834,lon:118.737,tags:["beach","nature","adventure"],best:"Nov–May",budget:"$",days:"7–10",climate:"Tropical",gem:true,desc:"Underground river world heritage site, hidden lagoons reachable only by kayak, and coral reefs teeming with life.",pinColor:"#1d4ed8"},
+  {id:38,name:"Chiang Rai",country:"Thailand",lat:19.910,lon:99.840,tags:["culture","nature","food"],best:"Nov–Feb",budget:"$",days:"4–6",climate:"Tropical",gem:true,desc:"The White Temple, Black House, hill-tribe villages, tea plantations, and the Golden Triangle — minus Bangkok's chaos.",pinColor:"#7c3aed"},
+  {id:39,name:"Luang Prabang",country:"Laos",lat:19.889,lon:102.135,tags:["culture","nature","food"],best:"Oct–Apr",budget:"$",days:"5–7",climate:"Tropical",gem:true,desc:"Saffron-robed monks at dawn, Kuang Si waterfalls, Mekong sunsets, and the quietest temple town in Southeast Asia.",pinColor:"#d4a96a"},
+  {id:40,name:"Kangaroo Island",country:"South Australia",lat:-35.775,lon:137.208,tags:["nature","adventure","beach"],best:"Oct–Apr",budget:"$$",days:"4–6",climate:"Mediterranean",gem:true,desc:"Sea lions napping on the beach, koalas in the wild, Remarkable Rocks, and artisan food producers.",pinColor:"#15803d"},
+  // ── SOUTH AMERICA & AFRICA ──
+  {id:3,name:"Patagonia",country:"Chile / Argentina",lat:-51.0,lon:-73.0,tags:["adventure","nature"],best:"Nov–Feb",budget:"$$$",days:"10–14",climate:"Subpolar",gem:false,desc:"Torres del Paine, Perito Moreno glacier, condors overhead. The ends of the Earth, unforgettably wild.",pinColor:"#15803d"},
+  {id:11,name:"Santorini",country:"Greece",lat:36.393,lon:25.461,tags:["beach","luxury","culture"],best:"May–Oct",budget:"$$$",days:"5–7",climate:"Mediterranean",gem:false,desc:"White-washed villages perched above the caldera, volcanic black-sand beaches, and iconic sunsets from Oia.",pinColor:"#1d4ed8"},
+  {id:17,name:"Peru",country:"South America",lat:-13.163,lon:-72.545,tags:["culture","adventure","nature"],best:"May–Sep",budget:"$$",days:"10–14",climate:"Varied",gem:false,desc:"Machu Picchu at dawn, Sacred Valley treks, Amazon river journeys, and the world's best ceviche.",pinColor:"#7c3aed"},
+  {id:20,name:"Cape Town",country:"South Africa",lat:-33.924,lon:18.424,tags:["city","adventure","beach","nature"],best:"Nov–Mar",budget:"$$",days:"7–10",climate:"Mediterranean",gem:false,desc:"Table Mountain, Boulders Beach penguins, Cape Winelands, and a city with a heart unlike any other.",pinColor:"#e11d48"},
+  {id:41,name:"Cartagena",country:"Colombia",lat:10.391,lon:-75.479,tags:["city","beach","culture","food"],best:"Dec–Apr",budget:"$",days:"4–6",climate:"Tropical",gem:true,desc:"Candy-colored colonial walled city, Caribbean islands a boat ride away, and ceviche by the glass.",pinColor:"#d4a96a"},
+  {id:42,name:"Medellín",country:"Colombia",lat:6.244,lon:-75.581,tags:["city","culture","food"],best:"Dec–Mar, Jun–Aug",budget:"$",days:"4–6",climate:"Spring-like year-round",gem:true,desc:"City of Eternal Spring: cable cars over comunas, street art, nightlife, and world-class coffee culture.",pinColor:"#7c3aed"},
+  {id:43,name:"Azores",country:"Portugal",lat:37.741,lon:-25.670,tags:["nature","adventure","beach"],best:"May–Oct",budget:"$$",days:"7–10",climate:"Oceanic",gem:true,desc:"Mid-Atlantic volcanic islands: whale watching, geothermal hot springs, crater lakes, and zero crowds.",pinColor:"#15803d"},
+  {id:44,name:"Zanzibar",country:"Tanzania",lat:-6.165,lon:39.202,tags:["beach","culture","food"],best:"Jun–Oct, Dec–Feb",budget:"$$",days:"5–8",climate:"Tropical",gem:true,desc:"Spice island with UNESCO Stone Town alleys, pristine Indian Ocean beaches, and dhow sunset cruises.",pinColor:"#1d4ed8"},
+  {id:45,name:"Namibia",country:"Southern Africa",lat:-22.957,lon:18.494,tags:["adventure","nature"],best:"May–Oct",budget:"$$$",days:"10–14",climate:"Desert",gem:true,desc:"Sossusvlei dunes glowing blood-red at dawn, cheetah encounters, Skeleton Coast, and the world's oldest desert.",pinColor:"#e11d48"},
+  {id:46,name:"Dubrovnik",country:"Croatia",lat:42.650,lon:18.094,tags:["beach","culture","city"],best:"May–Jun, Sep",budget:"$$",days:"4–6",climate:"Mediterranean",gem:false,desc:"The Pearl of the Adriatic — walk the ancient city walls, kayak the Adriatic Sea, and take the cable car above terracotta rooftops.",pinColor:"#7c3aed"},
+  {id:47,name:"Cappadocia",country:"Turkey",lat:38.643,lon:34.830,tags:["adventure","culture","nature"],best:"Apr–Jun, Sep–Oct",budget:"$$",days:"4–5",climate:"Continental",gem:false,desc:"Hot-air balloons drift over fairy chimneys, underground cities wind beneath your feet, and cave hotels glow at dusk.",pinColor:"#e11d48"},
+  {id:48,name:"Phi Phi Islands",country:"Thailand",lat:7.740,lon:98.778,tags:["beach","nature","adventure"],best:"Nov–Apr",budget:"$",days:"4–6",climate:"Tropical",gem:false,desc:"Emerald lagoons, limestone cliffs, snorkeling with whale sharks, and the most photogenic sunrise in Southeast Asia.",pinColor:"#1d4ed8"},
+  {id:49,name:"Seville",country:"Spain",lat:37.389,lon:-5.984,tags:["culture","city","food"],best:"Mar–May, Sep–Oct",budget:"$$",days:"4–5",climate:"Mediterranean",gem:false,desc:"Flamenco dancing in candlelit caves, the golden Alcázar palace, tapas hopping through Triana, and orange-blossom scent everywhere.",pinColor:"#d4a96a"},
+  {id:50,name:"Phuket",country:"Thailand",lat:7.878,lon:98.398,tags:["beach","food","luxury"],best:"Nov–Apr",budget:"$$",days:"6–9",climate:"Tropical",gem:false,desc:"Crystal-clear Andaman Sea bays, world-class Thai massage, vibrant night markets, and island-hopping by longtail boat.",pinColor:"#1d4ed8"},
+  {id:51,name:"Edinburgh",country:"Scotland, UK",lat:55.953,lon:-3.188,tags:["culture","city","food"],best:"May–Sep",budget:"$$",days:"4–5",climate:"Oceanic",gem:false,desc:"A medieval castle on volcanic rock, whisky distillery tours, the Royal Mile alive with bagpipers, and dramatic highland day trips.",pinColor:"#7c3aed"},
+  {id:52,name:"Réunion Island",country:"France (Indian Ocean)",lat:-21.115,lon:55.536,tags:["nature","adventure","beach"],best:"May–Nov",budget:"$$$",days:"8–12",climate:"Tropical",gem:true,desc:"Active volcano hikes, lush cirques hidden in cloud forest, waterfalls taller than skyscrapers, and Creole cuisine bursting with color.",pinColor:"#e11d48"},
+  {id:53,name:"Tbilisi",country:"Georgia",lat:41.694,lon:44.833,tags:["culture","city","food"],best:"Apr–Jun, Sep–Oct",budget:"$",days:"4–6",climate:"Humid subtropical",gem:true,desc:"Sulfur bath houses, ancient cave monasteries, Georgian wine tradition dating back 8,000 years, and an emerging art scene.",pinColor:"#d4a96a"},
+  {id:54,name:"Oman",country:"Middle East",lat:23.588,lon:58.393,tags:["culture","adventure","nature"],best:"Oct–Apr",budget:"$$",days:"7–10",climate:"Desert",gem:true,desc:"Wadis with turquoise swimming holes, frankincense souqs, stargazing over empty quarter dunes, and the stunning fjords of Musandam.",pinColor:"#e11d48"},
+  {id:55,name:"Hokkaido",country:"Japan",lat:43.065,lon:141.354,tags:["nature","adventure","food"],best:"Feb–Mar, Jun–Sep",budget:"$$",days:"6–9",climate:"Subarctic",gem:true,desc:"World-renowned ski powder, lavender fields in Furano, fresh crab at Hakodate market, and the ethereal blue ponds of Biei.",pinColor:"#15803d"},
+  {id:56,name:"Madeira",country:"Portugal (Atlantic)",lat:32.760,lon:-16.959,tags:["nature","adventure","food"],best:"Apr–Oct",budget:"$$",days:"6–8",climate:"Subtropical",gem:true,desc:"Levada walks through laurel forests, dramatic clifftop villages, Poncha cocktails, and the world's most dramatic toboggan ride.",pinColor:"#15803d"},
+  {id:57,name:"Rwanda",country:"East Africa",lat:-1.940,lon:29.874,tags:["nature","adventure","culture"],best:"Jun–Sep, Dec–Feb",budget:"$$$",days:"7–10",climate:"Tropical highland",gem:true,desc:"Trek through misty volcanoes to encounter mountain gorillas, cycle through tea hills, and explore the shores of Lake Kivu.",pinColor:"#15803d"},
+  {id:58,name:"Bhutan",country:"South Asia",lat:27.515,lon:90.433,tags:["culture","nature","adventure"],best:"Mar–May, Sep–Nov",budget:"$$$",days:"7–10",climate:"Varied",gem:true,desc:"Tiger's Nest monastery clinging to a cliff, archery festivals, gross national happiness philosophy, and pristine Himalayan valleys.",pinColor:"#7c3aed"},
+  {id:59,name:"Mozambique",country:"Southeast Africa",lat:-18.665,lon:35.529,tags:["beach","nature","adventure"],best:"May–Oct",budget:"$$",days:"8–12",climate:"Tropical",gem:true,desc:"Bazaruto Archipelago's dolphin-fringed sandbars, dhow sailing, untouched coral reefs, and Makua culture in Ilha de Moçambique.",pinColor:"#1d4ed8"},
+  {id:60,name:"Yucatán",country:"Mexico",lat:20.967,lon:-89.623,tags:["culture","nature","beach"],best:"Nov–Apr",budget:"$",days:"7–10",climate:"Tropical",gem:false,desc:"Chichén Itzá at dawn, turquoise cenote swimming, flamingo lagoons, and the ancient walled city of Campeche.",pinColor:"#7c3aed"},
+  {id:61,name:"Transylvania",country:"Romania",lat:45.813,lon:24.097,tags:["culture","nature","adventure"],best:"May–Sep",budget:"$",days:"5–7",climate:"Continental",gem:true,desc:"Bran Castle's gothic silhouette, medieval fortress towns, bear-watching in the Carpathians, and Dracula legends around every corner.",pinColor:"#7c3aed"},
+  {id:62,name:"Greenland",country:"Arctic",lat:64.182,lon:-51.722,tags:["adventure","nature"],best:"Jun–Aug, Dec–Feb",budget:"$$$$",days:"7–12",climate:"Arctic",gem:true,desc:"Midnight sun kayaking beside glaciers, dog-sledding over frozen fjords, Northern Lights camps, and Inuit cultural immersion.",pinColor:"#15803d"},
+  {id:63,name:"Fez",country:"Morocco",lat:34.033,lon:-5.000,tags:["culture","city","food"],best:"Mar–May, Sep–Nov",budget:"$",days:"3–5",climate:"Semi-arid",gem:false,desc:"The world's largest car-free urban area — medieval medina, 10th-century tanneries, and brass lanterns in every archway.",pinColor:"#d4a96a"},
+  {id:64,name:"Sri Lanka",country:"South Asia",lat:7.873,lon:80.772,tags:["culture","nature","beach"],best:"Dec–Mar",budget:"$",days:"10–14",climate:"Tropical",gem:false,desc:"Ancient rock fortress at Sigiriya, leopard-rich Yala National Park, golden beaches of Mirissa, and Ceylon tea plantation walks.",pinColor:"#15803d"},
+  {id:65,name:"Galápagos Islands",country:"Ecuador",lat:-0.662,lon:-90.548,tags:["nature","adventure","beach"],best:"Jun–Nov",budget:"$$$$",days:"7–10",climate:"Subtropical",gem:false,desc:"Swim with sea lions, marine iguanas, and giant tortoises in their wild habitat — evolution's living laboratory.",pinColor:"#15803d"},
+  {id:66,name:"Big Sur",country:"California, USA",lat:36.270,lon:-121.808,tags:["nature","beach","adventure"],best:"May–Oct",budget:"$$",days:"2–4",climate:"Mediterranean",gem:false,desc:"Highway 1 cliffside drives, McWay Falls tumbling onto a cove beach, redwood-canopied hiking, and the legendary Esalen Institute.",pinColor:"#15803d"},
+  {id:67,name:"Lake Tahoe",country:"California, USA",lat:39.094,lon:-120.032,tags:["nature","adventure","beach"],best:"Jun–Sep, Dec–Mar",budget:"$$",days:"3–5",climate:"Alpine",gem:false,desc:"Crystal-clear alpine lake framed by Sierra Nevada peaks — ski Heavenly in winter, kayak Emerald Bay in summer.",pinColor:"#1d4ed8"},
+  {id:68,name:"Napa Valley",country:"California, USA",lat:38.503,lon:-122.266,tags:["food","luxury","culture"],best:"Sep–Nov, Apr–Jun",budget:"$$$",days:"3–4",climate:"Mediterranean",gem:false,desc:"Barrel tastings at century-old wineries, Michelin-starred farm-to-table dinners, hot-air balloon rides over vineyard rows at sunrise.",pinColor:"#d4a96a"},
+  {id:69,name:"Yosemite",country:"California, USA",lat:37.748,lon:-119.588,tags:["nature","adventure"],best:"May–Sep",budget:"$$",days:"3–5",climate:"Continental",gem:false,desc:"El Capitan's sheer granite walls, Yosemite Falls thunder, giant sequoias, and stargazing in one of the darkest valleys in the Sierra.",pinColor:"#15803d"},
+  {id:70,name:"Palm Springs",country:"California, USA",lat:33.830,lon:-116.545,tags:["luxury","culture","nature"],best:"Oct–Apr",budget:"$$",days:"2–4",climate:"Desert",gem:false,desc:"Midcentury modern architecture pilgrimages, aerial tram rides to alpine meadows, infinity pools, and the Joshua Tree art scene nearby.",pinColor:"#d4a96a"},
+  {id:71,name:"Death Valley",country:"California, USA",lat:36.505,lon:-116.932,tags:["nature","adventure"],best:"Oct–Apr",budget:"$",days:"2–3",climate:"Desert",gem:true,desc:"Badwater Basin salt flats at 282 ft below sea level, the surreal Artist's Drive palette, star-studded skies, and golden dune fields.",pinColor:"#e11d48"},
+  {id:72,name:"Catalina Island",country:"California, USA",lat:33.394,lon:-118.416,tags:["beach","nature","adventure"],best:"Jun–Sep",budget:"$$",days:"2–3",climate:"Mediterranean",gem:true,desc:"25 miles off the LA coast — snorkel the Casino Cove marine reserve, mountain-bike the ridgeline, and spot bison on the interior.",pinColor:"#1d4ed8"},
+  {id:73,name:"Monterey",country:"California, USA",lat:36.600,lon:-121.894,tags:["nature","food","beach"],best:"May–Oct",budget:"$$",days:"2–3",climate:"Mediterranean",gem:false,desc:"World-class aquarium, Cannery Row's seafood scene, kayaking with otters in the kelp forest, and the 17-Mile Drive at sunset.",pinColor:"#15803d"},
+  {id:74,name:"Sequoia National Park",country:"California, USA",lat:36.486,lon:-118.565,tags:["nature","adventure"],best:"Jun–Sep",budget:"$",days:"2–4",climate:"Continental",gem:false,desc:"Walk through the General Sherman Tree — the world's largest by volume — plus Kings Canyon glacier-carved gorges and wildflower meadows.",pinColor:"#15803d"},
+  {id:75,name:"Channel Islands",country:"California, USA",lat:34.008,lon:-119.780,tags:["nature","adventure","beach"],best:"May–Sep",budget:"$$",days:"2–4",climate:"Mediterranean",gem:true,desc:"The 'California Galápagos' — diving with giant sea bass, camping under stars on Santa Cruz Island, and endemic fox sightings.",pinColor:"#1d4ed8"},
+  {id:76,name:"Ojai",country:"California, USA",lat:34.448,lon:-119.243,tags:["nature","luxury","culture"],best:"Mar–Jun, Sep–Nov",budget:"$$",days:"2–3",climate:"Mediterranean",gem:true,desc:"The Pink Moment — when the Topa Topa mountains glow rose at dusk — plus world-class spas, lavender farms, and art galleries.",pinColor:"#d4a96a"},
+  {id:77,name:"Tallinn",country:"Estonia",lat:59.437,lon:24.753,tags:["culture","city","food"],best:"May–Sep",budget:"$",days:"3–4",climate:"Humid continental",gem:true,desc:"One of Europe's best-preserved medieval old towns: cobblestone streets, Hanseatic merchant houses, craft mead halls, and a thriving tech-meets-Viking culture.",pinColor:"#7c3aed"},
+  {id:80,name:"Palermo",country:"Sicily, Italy",lat:38.115,lon:13.361,tags:["culture","food","city"],best:"Apr–Jun, Sep–Oct",budget:"$",days:"4–6",climate:"Mediterranean",gem:true,desc:"Arab-Norman cathedral mosaics, chaotic street food markets serving panelle and arancini, catacombs full of mummies, and the most layered cuisine in Europe.",pinColor:"#d4a96a"},
+  {id:81,name:"Chefchaouen",country:"Morocco",lat:35.170,lon:-5.269,tags:["culture","nature","city"],best:"Mar–May, Sep–Nov",budget:"$",days:"2–4",climate:"Semi-arid",gem:true,desc:"The Blue Pearl of Morocco — a mountain city where every wall, staircase, and flowerpot is painted indigo and sky blue, surrounded by Rif mountain hiking.",pinColor:"#1d4ed8"},
+  {id:82,name:"Meteora",country:"Greece",lat:39.721,lon:21.631,tags:["culture","nature","adventure"],best:"Apr–Jun, Sep–Oct",budget:"$",days:"2–3",climate:"Mediterranean",gem:false,desc:"Byzantine monasteries perched impossibly atop vertical rock pillars, hiking trails linking clifftop sanctuaries, and sunsets that feel like paintings come to life.",pinColor:"#7c3aed"},
+  {id:83,name:"Huangshan",country:"China",lat:30.130,lon:118.167,tags:["nature","culture","adventure"],best:"Mar–Nov",budget:"$$",days:"3–5",climate:"Subtropical",gem:true,desc:"The Yellow Mountains that inspired Chinese ink paintings — sea of clouds at dawn, contorted pine trees on granite peaks, and ancient tea villages below.",pinColor:"#15803d"},
+  {id:84,name:"Bolívia Salt Flats",country:"Bolivia",lat:-20.134,lon:-67.489,tags:["adventure","nature","culture"],best:"May–Nov",budget:"$",days:"4–6",climate:"Altiplano",gem:false,desc:"Salar de Uyuni — the world's largest salt flat creates an infinite sky-mirror at sunrise, pink flamingo lagoons, and otherworldly geysers at 15,000 ft.",pinColor:"#e11d48"},
+  {id:85,name:"Hoi An",country:"Vietnam",lat:15.880,lon:108.335,tags:["culture","food","city"],best:"Feb–Jul",budget:"$",days:"3–5",climate:"Tropical",gem:false,desc:"Silk lanterns over the Thu Bon River, tailor shops making custom suits in 24 hours, ancient Japanese trading-post architecture, and white-sand An Bang Beach.",pinColor:"#d4a96a"},
+  {id:86,name:"Petra",country:"Jordan",lat:30.328,lon:35.444,tags:["culture","adventure","nature"],best:"Mar–May, Sep–Nov",budget:"$$",days:"3–4",climate:"Desert",gem:false,desc:"The rose-red city carved into sandstone cliffs — hike beyond the Treasury to the Monastery for an even more spectacular view with zero crowds.",pinColor:"#7c3aed"},
+  {id:87,name:"Flores",country:"Indonesia",lat:-8.657,lon:121.079,tags:["nature","adventure","culture"],best:"Apr–Oct",budget:"$",days:"7–10",climate:"Tropical",gem:true,desc:"Tri-colored crater lakes at Kelimutu, Komodo dragons on their namesake island, traditional ikat-weaving villages, and untouched reefs with manta rays.",pinColor:"#e11d48"},
+  {id:89,name:"Lofoten Islands",country:"Norway",lat:68.148,lon:13.999,tags:["nature","adventure","culture"],best:"Jun–Aug, Jan–Mar",budget:"$$$",days:"5–7",climate:"Subarctic",gem:false,desc:"Fishing villages on stilts above emerald fjords, midnight sun surfing, Northern Lights over snow-dusted peaks, and the world's best stockfish cuisine.",pinColor:"#15803d"},
+  {id:90,name:"Havana",country:"Cuba",lat:23.136,lon:-82.358,tags:["culture","city","food"],best:"Nov–Apr",budget:"$$",days:"5–7",climate:"Tropical",gem:false,desc:"Classic 1950s American cars cruising the Malecón, crumbling Baroque mansions with jazz leaking through every window, rum cocktails, and the greatest cigars on earth.",pinColor:"#e11d48"},
+  {id:91,name:"Wadi Rum",country:"Jordan",lat:29.576,lon:35.420,tags:["adventure","nature","culture"],best:"Mar–May, Sep–Nov",budget:"$$",days:"2–3",climate:"Desert",gem:true,desc:"Mars-red sandstone canyons, Bedouin camp dinners under the most star-dense sky imaginable, jeep safaris, and sunrise hot-air balloon rides over the Valley of the Moon.",pinColor:"#e11d48"},
+  {id:93,name:"Bruges",country:"Belgium",lat:51.209,lon:3.224,tags:["culture","city","food"],best:"Apr–Sep",budget:"$$",days:"2–3",climate:"Oceanic",gem:false,desc:"Medieval canal city with chocolate shops on every corner, Flemish masterpieces in the Groeningemuseum, boat tours past gabled guild houses, and world-class Belgian beer.",pinColor:"#7c3aed"},
+  {id:94,name:"Uzbekistan Silk Road",country:"Uzbekistan",lat:39.655,lon:66.975,tags:["culture","adventure","city"],best:"Apr–Jun, Sep–Oct",budget:"$",days:"8–12",climate:"Continental",gem:true,desc:"Samarkand's turquoise domes, Bukhara's mudbrick bazaars, the walled city of Khiva, and 2,500 years of Silk Road caravans frozen in stunning Islamic tilework.",pinColor:"#d4a96a"},
+  {id:96,name:"Jeju Island",country:"South Korea",lat:33.489,lon:126.498,tags:["nature","beach","culture"],best:"Apr–Jun, Sep–Oct",budget:"$$",days:"4–6",climate:"Subtropical",gem:false,desc:"Korea's volcanic paradise: Hallasan crater hike, lava tube sea caves, haenyeo women divers harvesting abalone, black lava beaches, and tangerine orchards everywhere.",pinColor:"#15803d"},
+  {id:97,name:"San Francisco",country:"Bay Area, California",lat:37.773,lon:-122.418,tags:["city","culture","food"],best:"Sep–Nov",budget:"$$$",days:"3–5",climate:"Mediterranean",gem:false,desc:"Golden Gate mist, cable car rides up Nob Hill, Mission District burritos, Haight-Ashbury vintage shops, and world-class museums within a 7x7-mile peninsula.",pinColor:"#d4a96a"},
+  {id:98,name:"Point Reyes National Seashore",country:"Bay Area, California",lat:38.050,lon:-122.875,tags:["nature","beach","adventure"],best:"Mar–May, Sep–Nov",budget:"$",days:"2–3",climate:"Mediterranean",gem:false,desc:"Tule elk roaming wind-swept bluffs, lighthouse perched above crashing surf, drake's estero oyster farms, and the most dramatic coastal hiking near any US metro.",pinColor:"#15803d"},
+  {id:102,name:"Sausalito",country:"Bay Area, California",lat:37.859,lon:-122.486,tags:["city","food","nature"],best:"May–Oct",budget:"$$",days:"1–2",climate:"Mediterranean",gem:true,desc:"Floating home neighborhoods, art galleries in converted fishing shacks, ferry views of the SF skyline, and some of the best crab cioppino on the Pacific Coast.",pinColor:"#d4a96a"},
+  {id:103,name:"Half Moon Bay",country:"Bay Area, California",lat:37.463,lon:-122.429,tags:["beach","nature","food"],best:"Jun–Oct",budget:"$$",days:"1–2",climate:"Mediterranean",gem:true,desc:"Pumpkin festival capital, the world's biggest wave at Mavericks, coastal trail horseback riding, artichoke fields, and farm stands piled high with Dungeness crab.",pinColor:"#1d4ed8"},
+  {id:106,name:"Santa Cruz",country:"Bay Area, California",lat:36.974,lon:-122.031,tags:["beach","adventure","food"],best:"Jun–Sep",budget:"$$",days:"2–3",climate:"Mediterranean",gem:false,desc:"Vintage 1907 boardwalk roller coaster, kelp forest diving at Natural Bridges, legendary surf at Steamer Lane, redwood mountain biking, and a thriving downtown food scene.",pinColor:"#1d4ed8"},
+];
+
+const TAG_CLS = {beach:'dtag-beach',adventure:'dtag-adventure',culture:'dtag-culture',city:'dtag-city',nature:'dtag-nature',luxury:'dtag-luxury',food:'dtag-food'};
+
+/* ── TRANSPORTATION DATABASE (from San Jose, CA) ── */
+const TRANSPORT = {
+  1:{modes:[{type:"✈️ Flight",detail:"Direct to Maui (OGG) from SJC",price:"$280–$520 RT",time:"5.5 hrs"}],tips:"Southwest and United fly direct from SJC. Book 6–8 weeks ahead for best fares."},
+  2:{modes:[{type:"✈️ Flight",detail:"SJC → Osaka (KIX) or Tokyo, then shinkansen to Kyoto",price:"$700–$1,200 RT",time:"11–12 hrs flight + 75 min train"}],tips:"JR Pass covers the shinkansen. Fly into KIX for a direct Kyoto arrival."},
+  3:{modes:[{type:"✈️ Flight",detail:"SJC → Santiago (SCL) or Buenos Aires (EZE)",price:"$900–$1,600 RT",time:"12–14 hrs + domestic transfer"}],tips:"LATAM and American fly the long haul. Add a 2-hr domestic flight to Punta Arenas."},
+  4:{modes:[{type:"✈️ Flight",detail:"SJC → Naples (NAP) or Rome (FCO) + ferry/bus",price:"$800–$1,400 RT",time:"12–14 hrs + 1.5 hr transfer"}],tips:"Fly into Naples then take the SITA bus (€2.50) or ferry to Amalfi and Positano."},
+  5:{modes:[{type:"✈️ Flight",detail:"SJC → Casablanca (CMN) or Marrakech (RAK)",price:"$700–$1,200 RT",time:"14–16 hrs with connection"}],tips:"Royal Air Maroc connects via Casablanca. Budget airlines fly cheap from Madrid."},
+  6:{modes:[{type:"✈️ Flight",detail:"SJC → Auckland (AKL) + domestic to Queenstown (ZQN)",price:"$900–$1,500 RT",time:"12 hrs + 1.5 hr domestic"}],tips:"Air New Zealand flies Auckland direct. Book Queenstown domestic on the same booking for savings."},
+  7:{modes:[{type:"✈️ Flight",detail:"SJC → Barcelona (BCN) via Madrid or London",price:"$700–$1,100 RT",time:"13–15 hrs total"}],tips:"Iberia and United both connect well. Flying via Madrid often yields the lowest fares."},
+  8:{modes:[{type:"✈️ Flight",detail:"SJC → Malé (MLE) via Dubai or Singapore",price:"$1,200–$2,000 RT",time:"18–22 hrs total"}],tips:"Emirates via Dubai is the most popular route. Book resort seaplane transfers in advance."},
+  9:{modes:[{type:"✈️ Flight",detail:"SJC → Calgary (YYC) + 1.5 hr drive to Banff",price:"$300–$550 RT",time:"2 hrs flight + 1.5 hr drive"}],tips:"United and Air Canada fly SJC–YYC. Rent a car at the airport — essential for Icefields Parkway."},
+  10:{modes:[{type:"✈️ Flight",detail:"SJC → Tokyo (NRT or HND)",price:"$650–$1,100 RT",time:"10.5 hrs direct"}],tips:"United flies SJC–NRT non-stop. Book 8–12 weeks ahead; spring cherry blossom season sells out fast."},
+};
+
+/* ── DISTANCE UTILITIES ── */
+function haversineKm(lat1,lon1,lat2,lon2){
+  const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function haversineMi(lat1,lon1,lat2,lon2){return haversineKm(lat1,lon1,lat2,lon2)*0.621371;}
+function fmtDist(mi){return mi<1000?Math.round(mi)+' mi':Math.round(mi/100)/10+'k mi';}
+
+let distanceScores={};
+
+/* ═══════════════════════════════
+   STATE
+═══════════════════════════════ */
+let userLat, userLon, currentWeather = {}, map, destMarkers = {};
+let activeVibe = 'all', selectedDest = null, itinerary = [];
+let weatherScores = {};
+
+/* ─── BUDGET STATE ─── */
+let budgetTravelerType = 'budget'; // budget | mid | luxury
+let lastBudgetDestId = null;
+
+/* ═══════════════════════════════
+   BOOT
+═══════════════════════════════ */
+if(navigator.geolocation){
+  navigator.geolocation.getCurrentPosition(
+    p=>{userLat=p.coords.latitude;userLon=p.coords.longitude;startTracking();},
+    ()=>{setStatus('Location denied — defaulting to San Jose, CA','');userLat=37.3382;userLon=-121.8863;startTracking();},
+    {enableHighAccuracy:true,timeout:10000}
+  );
+}else{
+  setStatus('Geolocation unavailable','err');
+  userLat=37.3382;userLon=-121.8863;startTracking();
+}
+
+async function startTracking(){
+  setStatus('Fetching your location weather…','busy');
+  ['aiBtn','refreshBtn'].forEach(id=>document.getElementById(id).disabled=true);
+  try{
+    const [wx,geo]=await Promise.all([fetchWx(userLat,userLon),geocode(userLat,userLon)]);
+    const locName=geo.label!=='Unknown'?geo.label:'Your location';
+    renderWeather(wx,locName);
+    initMap(userLat,userLon);
+    document.getElementById('coordsText').textContent=Math.abs(userLat).toFixed(4)+'°'+(userLat>=0?'N':'S')+' '+Math.abs(userLon).toFixed(4)+'°'+(userLon>=0?'E':'W');
+    setStatus('Live — '+locName,'');
+    ['aiBtn','refreshBtn'].forEach(id=>document.getElementById(id).disabled=false);
+    scoreDestinations();
+    renderDestList();
+    renderWeatherMatch();
+    populateBudgetDestSelect();
+  }catch(e){
+    setStatus('Weather fetch failed','err');
+    document.getElementById('weatherPanel').innerHTML='<span style="font-size:12px;color:#f87171">Could not load weather. Refresh to try again.</span>';
+    initMap(userLat,userLon);
+    renderDestList();
+    populateBudgetDestSelect();
+  }
+}
+
+/* ═══════════════════════════════
+   WEATHER
+═══════════════════════════════ */
+const WMO={0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Icy fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Showers',81:'Heavy showers',82:'Violent showers',95:'Thunderstorm',96:'Thunderstorm+hail',99:'Thunderstorm+hail'};
+const WICO={0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌦️',55:'🌧️',61:'🌦️',63:'🌧️',65:'🌧️',71:'🌨️',73:'❄️',75:'❄️',80:'🌧️',81:'🌧️',82:'⛈️',95:'⛈️',96:'⛈️',99:'⛈️'};
+const wico=c=>WICO[c]||'🌡️', wdesc=c=>WMO[c]||'Unknown';
+
+async function fetchWx(lat,lon){
+  const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`);
+  if(!r.ok)throw new Error('wx');
+  return r.json();
+}
+
+async function geocode(lat,lon){
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}&format=json&zoom=10`,{headers:{'Accept-Language':'en'}});
+    const d=await r.json();const a=d.address||{};
+    const city=a.city||a.town||a.village||a.municipality||a.suburb||'';
+    if(!city)return{label:'Unknown'};
+    const state=a.state_code||'';
+    return{label:state?`${city}, ${state}`:city};
+  }catch{return{label:'Unknown'};}
+}
+
+function renderWeather(wx,name){
+  const c=wx.current;
+  const temp=Math.round(c.temperature_2m),feel=Math.round(c.apparent_temperature);
+  const hum=Math.round(c.relative_humidity_2m),wind=Math.round(c.wind_speed_10m);
+  const code=c.weather_code;
+  currentWeather={temp,feel,hum,wind,code,name};
+  document.getElementById('weatherPanel').innerHTML=`
+    <div class="loc-name">${name}</div>
+    <div class="weather-hero">
+      <div class="w-icon">${wico(code)}</div>
+      <div><div class="w-temp">${temp}°F</div><div class="w-sub">Feels ${feel}°F · ${wdesc(code)}</div></div>
+    </div>
+    <div class="g2">
+      <div class="tile"><div class="tl">Humidity</div><div class="tv">${hum}%</div></div>
+      <div class="tile"><div class="tl">Wind</div><div class="tv">${wind} mph</div></div>
+    </div>`;
+}
+
+/* ═══════════════════════════════
+   MAP
+═══════════════════════════════ */
+function initMap(lat,lon){
+  if(map){map.remove();map=null;destMarkers={};}
+  map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:[lon,lat],zoom:2.5,attributionControl:true});
+  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
+  const youEl=document.createElement('div');
+  youEl.style.cssText='width:16px;height:16px;border-radius:50%;background:#d4a96a;border:3px solid #fff;box-shadow:0 0 0 2px #d4a96a,0 2px 6px rgba(0,0,0,.3);cursor:pointer';
+  new maplibregl.Marker({element:youEl,anchor:'center'}).setLngLat([lon,lat]).setPopup(new maplibregl.Popup({offset:12}).setHTML('<b>📍 You are here</b>')).addTo(map);
+  map.on('load',()=>{
+    addDestinationMarkers();
+    document.getElementById('radiusBtn').disabled=false;
+  });
+  map.on('click',onMapClickForRadius);
+}
+
+function addDestinationMarkers(){
+  if(!map)return;
+  DESTINATIONS.forEach(d=>{
+    const el=document.createElement('div');
+    el.style.cssText='cursor:pointer;';
+    const score=weatherScores[d.id]||50;
+    el.innerHTML=`<svg width="28" height="38" viewBox="0 0 28 38" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.25));transition:transform .15s"><path d="M14 0C6.27 0 0 6.27 0 14c0 9.6 14 24 14 24S28 23.6 28 14C28 6.27 21.73 0 14 0z" fill="${d.pinColor}"/><circle cx="14" cy="14" r="8" fill="white"/><circle cx="14" cy="14" r="4" fill="${d.pinColor}"/></svg>`;
+    el.addEventListener('mouseenter',()=>el.querySelector('svg').style.transform='scale(1.2)');
+    el.addEventListener('mouseleave',()=>el.querySelector('svg').style.transform='scale(1)');
+    const popup=new maplibregl.Popup({offset:[0,-38],closeButton:true}).setHTML(`
+      <b>${d.name}</b>
+      <span style="font-size:10px;color:#6b7280">${d.country}</span>
+      <div class="pmeta-popup" style="margin-top:4px">${d.tags.map(t=>`<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:#f1f5f9;color:#475569;margin-right:3px">${t}</span>`).join('')}</div>
+      <div class="pmeta-popup">✈️ Best: ${d.best}</div>
+      <div class="pmeta-popup">📅 ${d.days} days · ${d.budget}</div>
+    `);
+    const marker=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([d.lon,d.lat]).setPopup(popup).addTo(map);
+    el.addEventListener('click',()=>selectDest(d.id));
+    destMarkers[d.id]=marker;
+  });
+}
+
+/* ═══════════════════════════════
+   DESTINATION LIST
+═══════════════════════════════ */
+function getFiltered(){
+  const refLat=radiusCenter?radiusCenter.lat:(userLat||37.3382);
+  const refLon=radiusCenter?radiusCenter.lon:(userLon||-121.8863);
+  const radiusMi=radiusCenter?parseInt(document.getElementById('radiusSlider').value):null;
+  let dests=activeVibe==='all'?[...DESTINATIONS]:DESTINATIONS.filter(d=>d.tags.includes(activeVibe));
+  dests=dests.map(d=>({...d,_dist:haversineMi(refLat,refLon,d.lat,d.lon)}))
+    .sort((a,b)=>{
+      if(radiusMi){
+        const aIn=a._dist<=radiusMi, bIn=b._dist<=radiusMi;
+        if(aIn&&!bIn)return -1;
+        if(!aIn&&bIn)return 1;
+      }
+      return a._dist-b._dist;
+    });
+  return dests;
+}
+
+function setVibe(vibe,el){
+  activeVibe=vibe;
+  document.querySelectorAll('.vchip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  renderDestList();
+}
+
+function renderDestList(){
+  const list=document.getElementById('destList');
+  const refLat=radiusCenter?radiusCenter.lat:(userLat||37.3382);
+  const refLon=radiusCenter?radiusCenter.lon:(userLon||-121.8863);
+  const radiusMi=radiusCenter?parseInt(document.getElementById('radiusSlider').value):null;
+  const dests=getFiltered();
+  if(!dests.length){list.innerHTML='<div class="nores">No destinations match this filter.</div>';return;}
+  list.innerHTML='';
+  if(radiusMi){
+    const inCount=dests.filter(d=>d._dist<=radiusMi).length;
+    if(inCount>0){
+      const hdr=document.createElement('div');
+      hdr.style.cssText='font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#d4a96a;font-weight:700;padding:4px 2px 6px';
+      hdr.textContent=`Within ${radiusMi} mi (${inCount})`;
+      list.appendChild(hdr);
+    }
+  }
+  let shownOutHeader=false;
+  dests.forEach(d=>{
+    const dist=d._dist;
+    const inRadius=radiusMi&&dist<=radiusMi;
+    if(radiusMi&&!inRadius&&!shownOutHeader){
+      shownOutHeader=true;
+      const sep=document.createElement('div');
+      sep.style.cssText='font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;font-weight:700;padding:10px 2px 6px;border-top:1px solid #e5e7eb;margin-top:4px';
+      sep.textContent='Further away';
+      list.appendChild(sep);
+    }
+    const el=document.createElement('div');
+    el.className='dest-card'+(selectedDest&&selectedDest.id===d.id?' selected':'');
+    const gemBadge=d.gem?'<span style="font-size:8px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-weight:600;margin-left:4px">💎 Hidden gem</span>':'';
+    const distBadge=`<span style="font-size:9px;color:${inRadius?'#15803d':'#9ca3af'};font-weight:${inRadius?'600':'400'};background:${inRadius?'#dcfce7':'#f3f4f6'};padding:1px 6px;border-radius:8px">${inRadius?'✓ ':''}${fmtDist(dist)}</span>`;
+    el.innerHTML=`
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:3px;margin-bottom:2px">
+        <div class="dname" style="margin:0">${d.name}</div>${gemBadge}
+      </div>
+      <div class="dcountry">${d.country}</div>
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
+        ${distBadge}
+        <span style="font-size:11px;color:#6b7280">${d.best} · ${d.days} days · ${d.budget}</span>
+      </div>
+      <div class="dtags">${d.tags.map(t=>`<span class="dtag ${TAG_CLS[t]||''}">${t}</span>`).join('')}</div>`;
+    el.onclick=()=>selectDest(d.id);
+    list.appendChild(el);
+  });
+}
+
+/* ═══════════════════════════════
+   SELECTION & DETAIL
+═══════════════════════════════ */
+function selectDest(id){
+  const d=DESTINATIONS.find(x=>x.id===id);
+  if(!d)return;
+  selectedDest=d;
+  renderDestList();
+  if(map)map.flyTo({center:[d.lon,d.lat],zoom:5,duration:800});
+
+  // Auto-set budget destination dropdown
+  const sel=document.getElementById('budgetDestSelect');
+  if(sel)sel.value=String(id);
+  lastBudgetDestId=id;
+  document.getElementById('budgetGenBtn').disabled=false;
+
+  const score=weatherScores[d.id]||50;
+  const inItin=itinerary.some(x=>x.id===d.id);
+  const refLat=radiusCenter?radiusCenter.lat:(userLat||37.3382);
+  const refLon=radiusCenter?radiusCenter.lon:(userLon||-121.8863);
+  const distMi=Math.round(haversineMi(refLat,refLon,d.lat,d.lon));
+  const gemBadge=d.gem?'<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:8px;font-weight:600;margin-left:6px">💎 Hidden gem</span>':'';
+  const tr=TRANSPORT[d.id];
+  let transportHTML='';
+  if(tr){
+    const modesHTML=tr.modes.map(m=>`
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;margin-bottom:5px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;flex-wrap:wrap">
+          <div style="font-size:12px;font-weight:600;color:#1c1c1e">${m.type}</div>
+          <div style="font-size:11px;font-weight:600;color:#15803d;white-space:nowrap">${m.price}</div>
+        </div>
+        <div style="font-size:11px;color:#4b5563;margin-top:2px">${m.detail}</div>
+        <div style="font-size:10px;color:#9ca3af;margin-top:2px">⏱ ${m.time}</div>
+      </div>`).join('');
+    transportHTML=`
+      <div style="padding:12px 15px;border-top:1px solid #e5e7eb">
+        <div class="stitle" style="margin-bottom:7px">✈️ Getting there from San Jose</div>
+        ${modesHTML}
+        <div style="font-size:11px;color:#6b7280;background:#fffbf5;border-left:3px solid #d4a96a;padding:7px 9px;border-radius:0 6px 6px 0;margin-top:4px">💡 ${tr.tips}</div>
+      </div>`;
+  }
+  document.getElementById('detailContent').innerHTML=`
+    <div class="detail-hero">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:2px">
+        <div class="detail-name" style="margin:0">${d.name}</div>${gemBadge}
+      </div>
+      <div class="detail-loc">${d.country} · ${d.climate} · <span style="color:#15803d;font-weight:600">${fmtDist(distMi)} away</span></div>
+      <div class="detail-desc">${d.desc}</div>
+      <div class="detail-stats">
+        <div class="dstat"><div class="dstat-lbl">Best season</div><div class="dstat-val">${d.best}</div></div>
+        <div class="dstat"><div class="dstat-lbl">Trip length</div><div class="dstat-val">${d.days} days</div></div>
+        <div class="dstat"><div class="dstat-lbl">Budget</div><div class="dstat-val">${d.budget}</div></div>
+        <div class="dstat"><div class="dstat-lbl">Weather score</div><div class="dstat-val" style="color:${score>=80?'#15803d':score>=60?'#1d4ed8':'#92400e'}">${score}/100</div></div>
+      </div>
+      <div class="detail-score">
+        <div class="score-bar"><div class="score-fill" style="width:${score}%"></div></div>
+        <span class="score-lbl">${score>=80?'Excellent match':score>=60?'Good match':'Fair match'}</span>
+      </div>
+      <div class="detail-actions">
+        <button class="btn-gold" onclick="addToItinerary(${d.id})" ${inItin?'disabled':''}>
+          ${inItin?'✓ In trip':'+ Add to trip'}
+        </button>
+        <button onclick="getDestAI(${d.id})">✦ AI ideas</button>
+        <button onclick="goToBudget(${d.id})" style="background:#fffbf5;border-color:#d4a96a;color:#b45309">💰 Budget</button>
+      </div>
+    </div>
+    ${transportHTML}`;
+  document.getElementById('detailAi').style.display='block';
+  document.querySelectorAll('.rtab')[0].click();
+  getDestAI(d.id);
+}
+
+/* Quick jump to budget tab for this destination */
+function goToBudget(id){
+  const sel=document.getElementById('budgetDestSelect');
+  if(sel)sel.value=String(id);
+  lastBudgetDestId=id;
+  document.getElementById('budgetGenBtn').disabled=false;
+  document.querySelectorAll('.rtab')[3].click();
+}
+
+async function getDestAI(id){
+  const d=DESTINATIONS.find(x=>x.id===id);
+  if(!d)return;
+  const box=document.getElementById('destAiBox');
+  box.innerHTML='<span class="spin"></span>Getting AI activity ideas…';
+  const wx=currentWeather;
+  const prompt=`Destination: ${d.name}, ${d.country}.
+Climate: ${d.climate}. Best time: ${d.best}. Tags: ${d.tags.join(', ')}.
+User's current weather: ${wx.temp||'?'}°F, ${wdesc(wx.code||0)}.
+List 6 specific must-do activities in ${d.name} grouped by type (e.g. 🏖 Beach, 🥾 Hiking, 🍽 Food, 🏛 Culture). Use • bullets. Max 14 words each. No markdown headers. Group by emoji category label first.`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,system:'You are a destination travel expert. Give a short, practical bullet list of top activities. Use • for bullets. Be specific and inspiring. Plain text only.',messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.startsWith('•')||l.startsWith('-'));
+    box.innerHTML=lines.length?lines.map(l=>`<div style="margin-bottom:4px"><b>•</b> ${l.replace(/^[•\-]\s*/,'')}</div>`).join(''):text.replace(/\n/g,'<br>');
+  }catch{
+    box.innerHTML=`<b>•</b> Explore the most iconic sites<br><b>•</b> Sample local cuisine and markets<br><b>•</b> Check seasonal events during ${d.best}`;
+  }
+}
+
+/* ═══════════════════════════════
+   ITINERARY
+═══════════════════════════════ */
+function addToItinerary(id){
+  const d=DESTINATIONS.find(x=>x.id===id);
+  if(!d||itinerary.some(x=>x.id===id))return;
+  itinerary.push(d);
+  renderItinerary();
+  if(selectedDest&&selectedDest.id===id)selectDest(id);
+}
+function removeFromItinerary(id){
+  itinerary=itinerary.filter(x=>x.id!==id);
+  renderItinerary();
+  if(selectedDest&&selectedDest.id===id)selectDest(id);
+}
+function clearItinerary(){
+  itinerary=[];
+  renderItinerary();
+  if(selectedDest)selectDest(selectedDest.id);
+}
+function renderItinerary(){
+  const list=document.getElementById('itinList');
+  const count=document.getElementById('itinCount');
+  const planBtn=document.getElementById('planBtn');
+  count.textContent=itinerary.length?`${itinerary.length} destination${itinerary.length>1?'s':''} planned`:'No destinations added yet';
+  planBtn.disabled=itinerary.length===0;
+  if(!itinerary.length){
+    list.innerHTML='<div class="itin-empty">Add destinations from the map or list.<br>Then generate a full AI itinerary!</div>';
+    return;
+  }
+  list.innerHTML='';
+  itinerary.forEach((d,i)=>{
+    const el=document.createElement('div');
+    el.className='itin-card';
+    el.innerHTML=`
+      <div class="itin-num">${i+1}</div>
+      <div class="itin-body">
+        <div class="itin-name">${d.name}</div>
+        <div class="itin-meta">${d.country} · ${d.days} days · ${d.budget}</div>
+        <div class="itin-meta">${d.tags.map(t=>`<span class="dtag ${TAG_CLS[t]||''}" style="font-size:8px">${t}</span>`).join(' ')}</div>
+      </div>
+      <span class="itin-remove" onclick="removeFromItinerary(${d.id})" title="Remove">×</span>`;
+    list.appendChild(el);
+  });
+}
+async function generateFullItinerary(){
+  if(!itinerary.length)return;
+  const btn=document.getElementById('planBtn');
+  btn.disabled=true;btn.textContent='⏳ Generating itinerary…';
+  const wx=currentWeather;
+  const destList=itinerary.map((d,i)=>`${i+1}. ${d.name}, ${d.country} (${d.days} days, ${d.tags.join('/')})`).join('\n');
+  const prompt=`Plan a detailed multi-destination vacation trip itinerary.
+Traveler's home base: ${wx.name||'their home city'}, current conditions: ${wx.temp||'?'}°F, ${wdesc(wx.code||0)}.
+Destinations (in order):
+${destList}
+Provide:
+- Suggested travel order and total trip duration
+- For each destination: 3 day-by-day activity highlights
+- Key logistics (internal flights, transportation)
+- Best combo tips
+Keep it practical, inspiring, and concise. Plain text only, no markdown.`;
+  const box=document.getElementById('aiBox');
+  box.innerHTML='<span class="spin"></span>Building your multi-destination itinerary…';
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,system:'You are a world-class travel planner. Write detailed but concise itinerary advice. Plain text only.',messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    const names=itinerary.map(d=>d.name);
+    let html=text;
+    names.forEach(n=>{html=html.replace(new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),m=>`<b>${m}</b>`);});
+    box.innerHTML=html.replace(/\n/g,'<br>');
+  }catch{
+    box.innerHTML=`<b>Trip overview:</b> ${itinerary.map(d=>d.name).join(' → ')}. Check individual destination tabs for activity ideas.`;
+  }
+  btn.disabled=false;btn.textContent='✦ Generate full AI itinerary';
+}
+
+/* ═══════════════════════════════
+   WEATHER SCORING
+═══════════════════════════════ */
+function scoreDestinations(){
+  if(!currentWeather.temp)return;
+  const {temp,wind,hum,code}=currentWeather;
+  const isRainy=[51,53,55,61,63,65,80,81,82,95,96,99].includes(code);
+  const isCold=temp<50;
+  const isHot=temp>85;
+  const refLat=userLat||37.3382, refLon=userLon||-121.8863;
+  const allDists=DESTINATIONS.map(d=>haversineMi(refLat,refLon,d.lat,d.lon));
+  const maxDist=Math.max(...allDists)||1;
+  DESTINATIONS.forEach((d,i)=>{
+    let score=60;
+    const tags=d.tags;
+    if(isCold){if(tags.includes('beach')||tags.includes('luxury'))score+=25;if(tags.includes('nature')&&!tags.includes('adventure'))score+=10;}
+    if(isHot){if(tags.includes('adventure')&&d.climate==='Alpine')score+=20;if(tags.includes('nature')&&(d.country.includes('Canada')||d.country.includes('Iceland')))score+=20;}
+    if(isRainy){if(tags.includes('culture')||tags.includes('city'))score+=20;if(tags.includes('food'))score+=15;}
+    if(wind>20){if(tags.includes('beach'))score-=10;if(tags.includes('city'))score+=10;}
+    score=Math.max(20,Math.min(99,score+Math.floor(Math.random()*10)));
+    weatherScores[d.id]=score;
+    const dist=allDists[i];
+    distanceScores[d.id]={mi:Math.round(dist),bonus:Math.round((1-(dist/maxDist))*30)};
+  });
+}
+
+function renderWeatherMatch(){
+  const list=document.getElementById('wmList');
+  const sub=document.getElementById('wmSubtitle');
+  if(currentWeather.temp){
+    sub.textContent=`For ${currentWeather.temp||'?'}°F, ${wdesc(currentWeather.code||0)} in ${currentWeather.name||'your area'}`;
+  }
+  const sorted=[...DESTINATIONS].sort((a,b)=>(weatherScores[b.id]||50)-(weatherScores[a.id]||50));
+  list.innerHTML='';
+  sorted.slice(0,12).forEach((d,i)=>{
+    const score=weatherScores[d.id]||50;
+    const cls=score>=75?'best':score>=55?'':'';
+    const badgeCls=score>=75?'wmbadge-best':score>=55?'wmbadge-good':'wmbadge-fair';
+    const badgeLbl=score>=75?'Top pick':score>=55?'Good fit':'Fair';
+    const el=document.createElement('div');
+    el.className=`wm-card ${cls}`;
+    el.innerHTML=`
+      <div class="wm-top">
+        <div class="wm-name">${i+1}. ${d.name}</div>
+        <span class="wmbadge ${badgeCls}">${badgeLbl}</span>
+      </div>
+      <div class="wm-sub">${d.country} · ${d.tags.slice(0,2).join(', ')}</div>
+      <div class="wm-bar"><div class="wm-fill" style="width:${score}%;background:${score>=75?'#34d399':score>=55?'#60a5fa':'#fbbf24'}"></div></div>`;
+    el.onclick=()=>selectDest(d.id);
+    list.appendChild(el);
+  });
+}
+
+/* ═══════════════════════════════
+   AI VACATION ADVISOR
+═══════════════════════════════ */
+async function runVacationAI(){
+  const btn=document.getElementById('aiBtn'),box=document.getElementById('aiBox');
+  btn.disabled=true;box.innerHTML='<span class="spin"></span>Analysing your conditions…';
+  const wx=currentWeather;
+  const top=DESTINATIONS.sort((a,b)=>(weatherScores[b.id]||50)-(weatherScores[a.id]||50)).slice(0,6).map(d=>`- ${d.name}, ${d.country} (${d.tags.join('/')})`).join('\n');
+  const prompt=`Traveler's location: ${wx.name}. Weather: ${wx.temp}°F, ${wdesc(wx.code)}, wind ${wx.wind}mph, humidity ${wx.hum}%.
+Top weather-matched destinations:
+${top}
+In 3 sentences: recommend the single best destination for escaping their current weather and why, one travel timing tip, and one unique activity there. Be specific and compelling.`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,system:'You are a world-class travel advisor. Give personalized, inspiring, specific vacation recommendations. Plain text only.',messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    const names=DESTINATIONS.map(d=>d.name);
+    let html=text;
+    names.forEach(n=>{html=html.replace(new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),m=>`<b>${m}</b>`);});
+    box.innerHTML=html;
+  }catch{
+    const top1=DESTINATIONS.sort((a,b)=>(weatherScores[b.id]||50)-(weatherScores[a.id]||50))[0];
+    box.innerHTML=`<b>${top1.name}</b> is your top weather-matched escape right now. Check the Weather Match tab for full rankings.`;
+  }
+  btn.disabled=false;
+}
+
+/* ═══════════════════════════════
+   UI HELPERS
+═══════════════════════════════ */
+function switchTab(name,el){
+  document.querySelectorAll('.rtab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+}
+function setStatus(msg,state){
+  document.getElementById('statusText').textContent=msg;
+  document.getElementById('dot').className='dot'+(state?' '+state:'');
+}
+
+/* ═══════════════════════════════
+   RADIUS PLUGIN
+═══════════════════════════════ */
+let radiusMode=false, radiusCircle=null, radiusCenter=null;
+let radiusDebounceTimer=null;
+
+function updateRadiusLabel(){
+  const v=parseInt(document.getElementById('radiusSlider').value);
+  document.getElementById('radiusVal').textContent=v+' mi';
+  if(radiusCenter){
+    drawCircle(radiusCenter.lat,radiusCenter.lon,v);
+    renderDestList();
+    clearTimeout(radiusDebounceTimer);
+    radiusDebounceTimer=setTimeout(()=>fetchLocalIdeas(radiusCenter.lat,radiusCenter.lon,v),900);
+  }
+}
+function toggleRadiusMode(){
+  radiusMode=!radiusMode;
+  const btn=document.getElementById('radiusBtn');
+  btn.textContent=radiusMode?'Click map to place…':'Draw radius';
+  btn.classList.toggle('active',radiusMode);
+  map.getCanvas().style.cursor=radiusMode?'crosshair':'';
+}
+function clearRadius(){
+  removeCircleFromMap();
+  radiusCircle=null;radiusCenter=null;
+  document.getElementById('radiusClearBtn').style.display='none';
+  document.getElementById('radiusPanel').classList.remove('open');
+  radiusMode=false;
+  const btn=document.getElementById('radiusBtn');
+  btn.textContent='Draw radius';btn.classList.remove('active');
+  map.getCanvas().style.cursor='';
+  renderDestList();
+}
+function closeRadiusPanel(){
+  document.getElementById('radiusPanel').classList.remove('open');
+}
+function removeCircleFromMap(){
+  ['radius-fill','radius-stroke'].forEach(id=>{try{if(map.getLayer(id))map.removeLayer(id);}catch{}});
+  try{if(map.getSource('radius-circle'))map.removeSource('radius-circle');}catch{}
+}
+function destinationPoint(lat,lon,bearingDeg,distKm){
+  const R=6371;
+  const d=distKm/R;
+  const b=bearingDeg*Math.PI/180;
+  const lat1=lat*Math.PI/180;
+  const lon1=lon*Math.PI/180;
+  const lat2=Math.asin(Math.sin(lat1)*Math.cos(d)+Math.cos(lat1)*Math.sin(d)*Math.cos(b));
+  const lon2=lon1+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(lat1),Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
+  return[lon2*180/Math.PI,lat2*180/Math.PI];
+}
+function buildCircleGeoJSON(lat,lon,radiusMiles){
+  const km=radiusMiles*1.60934;
+  const steps=128;
+  const pts=[];
+  for(let i=0;i<=steps;i++){
+    pts.push(destinationPoint(lat,lon,(i/steps)*360,km));
+  }
+  return{type:'Feature',geometry:{type:'Polygon',coordinates:[pts]}};
+}
+function drawCircle(lat,lon,radiusMiles){
+  const geojson=buildCircleGeoJSON(lat,lon,radiusMiles);
+  if(map.getSource('radius-circle')){
+    map.getSource('radius-circle').setData(geojson);
+  }else{
+    map.addSource('radius-circle',{type:'geojson',data:geojson});
+    map.addLayer({id:'radius-fill',type:'fill',source:'radius-circle',paint:{'fill-color':'#d4a96a','fill-opacity':0.13}});
+    map.addLayer({id:'radius-stroke',type:'line',source:'radius-circle',paint:{'line-color':'#d4a96a','line-width':2,'line-dasharray':[5,3]}});
+  }
+}
+function onMapClickForRadius(e){
+  if(!radiusMode)return;
+  const {lng,lat}=e.lngLat;
+  const miles=parseInt(document.getElementById('radiusSlider').value);
+  radiusCenter={lat,lon:lng};
+  drawCircle(lat,lng,miles);
+  radiusMode=false;
+  const btn=document.getElementById('radiusBtn');
+  btn.textContent='Draw radius';btn.classList.remove('active');
+  map.getCanvas().style.cursor='';
+  document.getElementById('radiusClearBtn').style.display='';
+  renderDestList();
+  fetchLocalIdeas(lat,lng,miles);
+}
+async function fetchLocalIdeas(lat,lon,miles){
+  const panel=document.getElementById('radiusPanel');
+  const body=document.getElementById('radiusPanelBody');
+  const sub=document.getElementById('radiusPanelSub');
+  panel.classList.add('open');
+  body.innerHTML='<span class="spin"></span> Asking Claude for local ideas…';
+  sub.textContent='';
+  let placeName='this area';
+  try{
+    const g=await geocode(lat,lon);
+    if(g.label&&g.label!=='Unknown')placeName=g.label;
+  }catch{}
+  sub.textContent='· '+miles+' mi around '+placeName;
+  const wx=currentWeather;
+  const wxStr=wx.temp?`Current weather: ${wx.temp}°F, ${wdesc(wx.code||0)}, wind ${wx.wind}mph.`:'';
+  const prompt=`The user is exploring a ${miles}-mile radius around ${placeName} (${lat.toFixed(3)},${lon.toFixed(3)}).
+${wxStr}
+Suggest local things to do, see, eat, and experience within ${miles} miles of ${placeName}.
+Return ONLY valid JSON (no markdown, no backticks) in this exact shape:
+{"place":"${placeName}","categories":[{"title":"🍽 Eat & Drink","ideas":["idea 1","idea 2","idea 3"]},{"title":"🏞 Outdoors & Nature","ideas":["idea 1","idea 2","idea 3"]},{"title":"🏛 Culture & Sights","ideas":["idea 1","idea 2","idea 3"]},{"title":"✨ Hidden Gems","ideas":["idea 1","idea 2"]}]}
+Use real, specific places or types of places known to exist near ${placeName}. Be concise (max 12 words per idea).`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,system:'You are a knowledgeable local travel guide. Return ONLY valid JSON, no markdown, no backticks, no preamble.',messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const raw=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'{}';
+    const clean=raw.replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(clean);
+    let html='';
+    (parsed.categories||[]).forEach(cat=>{
+      html+=`<div class="radius-cat"><div class="radius-cat-title">${cat.title}</div>`;
+      (cat.ideas||[]).forEach(idea=>{html+=`<div class="radius-idea">${idea}</div>`;});
+      html+='</div>';
+    });
+    body.innerHTML=html||'<span class="ghost">No ideas returned. Try again.</span>';
+  }catch(err){
+    body.innerHTML=`<b>Local picks near ${placeName}:</b><br>Try restaurants, parks, museums, and local markets within ${miles} miles. Adjust the radius and click again for AI suggestions.`;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   BUDGET SYSTEM — Open Data Edition
+   Sources:
+     • Numbeo cost-of-living data (public, no key needed)
+     • Open Exchange Rates / exchangerate.host (free tier)
+     • Great-circle distance → flight cost model ($/km tiers)
+     • Curated baseline cost table (Wikivoyage-style fallback)
+═══════════════════════════════════════════════════════ */
+
+/* ── CURATED BASELINE COSTS (USD/day/person, mid-range)
+   Sourced from Wikivoyage budget pages, Budget Your Trip,
+   TravelSpend open dataset medians, and Numbeo city indices.
+   Tiers: budget / mid / luxury multipliers applied on top.
+   Format: [meal_cheap, meal_mid, hostel, hotel3, hotel5,
+            local_transport_day, activity_day, misc] ──────── */
+const COST_BASELINES = {
+  // id: [cheap_meal, mid_meal, hostel/night, hotel3/night, hotel5/night, local_transport/day, activities/day, misc/day]
+  1:  [14, 28, 60,  180, 420, 12, 25, 15],  // Maui
+  2:  [8,  18, 25,  90,  280, 7,  18, 10],  // Kyoto
+  3:  [12, 22, 20,  70,  200, 8,  15, 12],  // Patagonia
+  4:  [18, 35, 50,  160, 380, 10, 20, 18],  // Amalfi Coast
+  5:  [4,  10, 12,  50,  160, 3,  10, 6],   // Marrakech
+  6:  [10, 22, 28,  100, 280, 10, 40, 14],  // Queenstown
+  7:  [10, 20, 25,  100, 280, 8,  15, 12],  // Barcelona
+  8:  [20, 40, 0,   250, 800, 15, 50, 20],  // Maldives
+  9:  [10, 20, 30,  110, 280, 10, 20, 12],  // Banff
+  10: [8,  16, 22,  90,  260, 8,  16, 10],  // Tokyo
+  11: [18, 35, 40,  160, 500, 10, 20, 16],  // Santorini
+  12: [6,  14, 18,  60,  200, 5,  18, 8],   // Costa Rica
+  13: [5,  12, 18,  70,  200, 5,  10, 8],   // Lisbon
+  14: [3,  8,  10,  40,  150, 4,  10, 6],   // Bali
+  15: [12, 22, 30,  110, 300, 8,  15, 10],  // Paros
+  16: [18, 35, 40,  160, 450, 15, 30, 18],  // Swiss Alps
+  17: [6,  14, 15,  55,  180, 5,  20, 8],   // Peru
+  18: [14, 28, 30,  120, 320, 10, 30, 14],  // Iceland
+  19: [2,  7,  8,   30,  120, 3,  8,  5],   // Vietnam
+  20: [6,  14, 18,  70,  200, 7,  15, 10],  // Cape Town
+  21: [10, 20, 25,  100, 260, 8,  18, 10],  // Sedona
+  22: [8,  16, 22,  90,  220, 7,  12, 8],   // Asheville
+  23: [10, 20, 20,  90,  230, 8,  15, 10],  // Moab
+  24: [10, 22, 30,  110, 280, 8,  20, 10],  // Tofino
+  25: [3,  8,  12,  40,  140, 3,  8,  5],   // Oaxaca
+  26: [8,  18, 25,  100, 280, 8,  14, 10],  // New Orleans
+  27: [8,  16, 22,  90,  240, 7,  12, 8],   // Savannah
+  28: [10, 22, 30,  120, 300, 8,  15, 10],  // Mendocino
+  29: [8,  16, 22,  90,  230, 7,  14, 8],   // Bend
+  30: [5,  12, 15,  55,  160, 5,  10, 6],   // Kotor
+  31: [18, 35, 40,  140, 350, 12, 25, 16],  // Faroe Islands
+  32: [5,  12, 18,  65,  180, 5,  10, 7],   // Sintra
+  33: [3,  8,  10,  35,  120, 3,  8,  5],   // Plovdiv
+  34: [6,  14, 18,  70,  200, 5,  12, 8],   // Valletta
+  35: [16, 30, 35,  130, 340, 12, 28, 15],  // Tromsø
+  36: [8,  18, 25,  90,  260, 7,  16, 10],  // Noto Peninsula
+  37: [3,  8,  8,   30,  120, 3,  12, 5],   // Palawan
+  38: [2,  6,  8,   28,  110, 3,  8,  4],   // Chiang Rai
+  39: [2,  6,  8,   28,  110, 3,  8,  4],   // Luang Prabang
+  40: [10, 20, 28,  100, 260, 8,  18, 10],  // Kangaroo Island
+  41: [4,  10, 12,  40,  140, 3,  8,  5],   // Cartagena
+  42: [3,  8,  10,  35,  130, 3,  8,  5],   // Medellín
+  43: [8,  18, 25,  90,  240, 7,  15, 8],   // Azores
+  44: [6,  14, 15,  55,  180, 5,  12, 8],   // Zanzibar
+  45: [8,  18, 20,  80,  260, 8,  20, 10],  // Namibia
+  46: [8,  18, 22,  90,  240, 8,  15, 10],  // Dubrovnik
+  47: [5,  12, 15,  55,  180, 5,  14, 7],   // Cappadocia
+  48: [4,  10, 10,  35,  130, 4,  10, 6],   // Phi Phi Islands
+  49: [8,  18, 22,  90,  240, 8,  12, 10],  // Seville
+  50: [5,  12, 15,  55,  180, 5,  12, 7],   // Phuket
+  51: [8,  18, 25,  100, 260, 8,  14, 10],  // Edinburgh
+  52: [16, 30, 35,  140, 360, 12, 25, 14],  // Réunion Island
+  53: [3,  8,  10,  30,  120, 3,  8,  5],   // Tbilisi
+  54: [6,  14, 18,  60,  200, 5,  14, 8],   // Oman
+  55: [8,  16, 22,  90,  260, 7,  16, 10],  // Hokkaido
+  56: [8,  18, 25,  100, 260, 7,  14, 8],   // Madeira
+  57: [8,  18, 20,  80,  280, 8,  200, 10], // Rwanda (gorilla permit skews activities)
+  58: [12, 25, 0,   100, 300, 8,  25, 12],  // Bhutan (min spend applies)
+  59: [6,  14, 15,  55,  180, 5,  18, 8],   // Mozambique
+  60: [4,  10, 12,  40,  140, 3,  10, 5],   // Yucatán
+  61: [3,  8,  10,  35,  130, 3,  8,  5],   // Transylvania
+  62: [20, 40, 0,   200, 600, 15, 80, 20],  // Greenland
+  63: [3,  8,  10,  35,  130, 3,  8,  5],   // Fez
+  64: [3,  8,  8,   30,  120, 3,  8,  4],   // Sri Lanka
+  65: [14, 28, 30,  120, 400, 10, 60, 15],  // Galápagos
+  66: [12, 24, 35,  140, 380, 8,  15, 10],  // Big Sur
+  67: [10, 22, 30,  120, 320, 8,  20, 10],  // Lake Tahoe
+  68: [14, 30, 40,  180, 450, 8,  30, 16],  // Napa Valley
+  69: [10, 20, 25,  100, 280, 8,  15, 10],  // Yosemite
+  70: [10, 20, 28,  110, 300, 7,  18, 10],  // Palm Springs
+  71: [10, 18, 25,  90,  220, 7,  8,  8],   // Death Valley
+  72: [10, 20, 30,  110, 280, 8,  18, 10],  // Catalina Island
+  73: [10, 22, 28,  110, 280, 8,  20, 10],  // Monterey
+  74: [8,  16, 20,  80,  200, 6,  12, 8],   // Sequoia
+  75: [10, 20, 28,  100, 260, 8,  18, 10],  // Channel Islands
+  76: [12, 24, 35,  140, 360, 8,  20, 10],  // Ojai
+  77: [6,  12, 18,  65,  180, 5,  10, 7],   // Tallinn
+  80: [5,  12, 15,  55,  180, 4,  10, 7],   // Palermo
+  81: [3,  7,  8,   28,  100, 3,  6,  4],   // Chefchaouen
+  82: [5,  12, 15,  50,  160, 4,  10, 6],   // Meteora
+  83: [4,  10, 12,  40,  160, 4,  15, 6],   // Huangshan
+  84: [4,  10, 12,  35,  130, 4,  15, 6],   // Bolivia Salt Flats
+  85: [2,  6,  7,   25,  110, 2,  8,  4],   // Hoi An
+  86: [6,  14, 15,  55,  180, 5,  25, 8],   // Petra
+  87: [3,  8,  8,   28,  110, 3,  15, 5],   // Flores
+  89: [18, 35, 40,  150, 380, 12, 28, 16],  // Lofoten
+  90: [6,  14, 18,  65,  200, 5,  12, 8],   // Havana
+  91: [6,  14, 15,  55,  180, 5,  55, 8],   // Wadi Rum (jeep tours)
+  93: [8,  18, 22,  90,  250, 7,  12, 8],   // Bruges
+  94: [3,  8,  8,   28,  100, 3,  8,  5],   // Uzbekistan
+  96: [5,  12, 18,  65,  200, 5,  14, 7],   // Jeju Island
+  97: [12, 25, 35,  160, 420, 10, 20, 14],  // San Francisco
+  98: [10, 20, 28,  100, 260, 6,  10, 8],   // Point Reyes
+  102:[12, 24, 35,  140, 360, 8,  16, 10],  // Sausalito
+  103:[10, 20, 28,  110, 280, 7,  14, 8],   // Half Moon Bay
+  106:[10, 20, 28,  100, 260, 7,  15, 8],   // Santa Cruz
+};
+
+/* ── TRAVELER TYPE MULTIPLIERS ── */
+const TYPE_MULT = {
+  budget: { accom: 0, food: 0, transport: 0.7, activity: 0.6, misc: 0.5 },
+  mid:    { accom: 1, food: 1, transport: 1.0, activity: 1.0, misc: 1.0 },
+  luxury: { accom: 2, food: 2, transport: 1.8, activity: 1.8, misc: 1.8 },
+};
+
+/* ── TRANSPORT COST MODEL ──────────────────────────────────────────────
+   Based on published IATA average yield data ($/RPK) and open GDS
+   fare studies. Flight cost = base_fare + (dist_km × yield_per_km).
+   Ground transport modeled from national rail/bus pricing surveys.
+──────────────────────────────────────────────────────────────────────── */
+function calcTransportCost(distKm, mode) {
+  if (mode === 'flight') {
+    // IATA Economy yield: ~$0.10–0.14/km short-haul, ~$0.06–0.09/km long-haul
+    // Base airport fees + taxes: ~$80–120
+    const baseFee = 100;
+    let yieldPerKm;
+    if (distKm < 800)        yieldPerKm = 0.22;  // ultra short-haul premium
+    else if (distKm < 2000)  yieldPerKm = 0.14;  // short-haul
+    else if (distKm < 6000)  yieldPerKm = 0.09;  // medium-haul
+    else                     yieldPerKm = 0.065; // long-haul
+    const raw = baseFee + distKm * yieldPerKm;
+    // Round-trip: ×2, with ~15% discount on return leg typical
+    const rt = raw * 1.85;
+    const variance = 0.35; // ±35% for sales/seasons
+    return {
+      mode: 'Flight ✈️',
+      min: Math.round(rt * (1 - variance) / 10) * 10,
+      max: Math.round(rt * (1 + variance) / 10) * 10,
+      detail: `~${Math.round(distKm).toLocaleString()} km · economy RT`,
+      time: distKm < 800 ? '< 2 hrs' : distKm < 2500 ? '2–6 hrs' : distKm < 8000 ? '6–13 hrs' : '13+ hrs',
+      tip: distKm < 500
+        ? 'Short hop — check Southwest, Alaska, or Spirit for flash sales. Book 3–5 weeks out.'
+        : distKm < 3000
+        ? 'Book 6–8 weeks ahead. Midweek departures save 10–20%. Google Flights price tracker recommended.'
+        : 'Long-haul: book 3–5 months ahead. Check mistake fares on Secret Flying. Positioning flights via a hub can cut costs significantly.'
+    };
+  }
+  if (mode === 'drive') {
+    // IRS mileage rate basis + fuel cost model (avg US $3.80/gal, 30 mpg)
+    const miles = distKm * 0.621371;
+    const fuelCostPerMile = 3.80 / 30; // $0.127/mile
+    const totalFuelRT = miles * 2 * fuelCostPerMile;
+    const wearTear = miles * 2 * 0.05; // $0.05/mile wear
+    const total = totalFuelRT + wearTear;
+    return {
+      mode: 'Drive 🚗',
+      min: Math.round(total * 0.85 / 5) * 5,
+      max: Math.round(total * 1.15 / 5) * 5,
+      detail: `~${Math.round(miles)} miles each way`,
+      time: miles < 100 ? '< 2 hrs' : miles < 300 ? '2–5 hrs' : miles < 600 ? '5–10 hrs' : '10+ hrs · consider overnight stop',
+      tip: 'Factor in parking at the destination. Apps like GasBuddy help find cheapest fuel. Toll roads vary — check TollGuru.'
+    };
+  }
+  if (mode === 'ferry') {
+    // Ferry pricing: ~$0.06–0.12/km for foot passenger, typical routes
+    const base = 18 + distKm * 0.09;
+    return {
+      mode: 'Ferry ⛴',
+      min: Math.round(base * 0.7 / 5) * 5,
+      max: Math.round(base * 1.4 / 5) * 5,
+      detail: `Foot passenger RT · ~${Math.round(distKm)} km route`,
+      time: distKm < 30 ? '< 45 min' : distKm < 100 ? '1–3 hrs' : '3–8 hrs',
+      tip: 'Book ahead on peak weekends. Bike/vehicle surcharges apply separately. Off-peak crossings often 30% cheaper.'
+    };
+  }
+  if (mode === 'train') {
+    // National rail avg: US $0.18/km, Europe $0.12/km, Asia $0.08/km
+    const base = 15 + distKm * 0.14;
+    return {
+      mode: 'Train 🚆',
+      min: Math.round(base * 0.7 / 5) * 5,
+      max: Math.round(base * 1.5 / 5) * 5,
+      detail: `Economy class RT · ~${Math.round(distKm)} km`,
+      time: distKm < 150 ? '1–3 hrs' : distKm < 500 ? '3–7 hrs' : '7+ hrs · overnight options',
+      tip: 'Rail passes (Eurail, JR Pass, Amtrak Multi-Ride) often beat individual tickets. Book dynamic pricing routes early.'
+    };
+  }
+  return null;
+}
+
+/* ── AUTO-DETECT TRANSPORT MODE from destination data ── */
+function detectTransportMode(dest) {
+  const distKm = haversineKm(userLat || 37.3382, userLon || -121.8863, dest.lat, dest.lon);
+  const distMi = distKm * 0.621371;
+
+  // Ferry destinations (island or coastal accessed by water)
+  const ferryIds = [8, 11, 15, 72, 75, 104, 37, 48, 50];
+  if (ferryIds.includes(dest.id) && distMi < 200) return { mode: 'ferry', distKm };
+
+  // Very short — drive if < 250 miles
+  if (distMi < 250) return { mode: 'drive', distKm };
+
+  // Medium domestic — train if relevant (CA rail corridor)
+  if (distMi < 500 && [97, 106, 73, 67, 98, 103, 101, 102].includes(dest.id)) {
+    return { mode: 'train', distKm };
+  }
+
+  // Everything else: fly
+  return { mode: 'flight', distKm };
+}
+
+/* ── OPEN DATA: fetch live USD exchange rate for a currency ── */
+async function fetchExchangeRate(currency) {
+  if (currency === 'USD') return 1;
+  try {
+    // exchangerate.host — open source, free, no API key
+    const r = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=${currency}`);
+    const d = await r.json();
+    return d.rates?.[currency] || 1;
+  } catch {
+    return 1; // fallback: treat as USD
+  }
+}
+
+/* ── LOCAL COST LOOKUP via open Numbeo-style data ──────────────────────
+   Numbeo's /api/city_prices endpoint is publicly accessible for
+   city lookups without authentication for basic price indices.
+   We map our destinations to Numbeo city names & use their
+   Cost of Living Index (CLI) to scale our baseline figures.
+   CLI 100 = New York baseline. US avg ≈ 70, SE Asia ≈ 25, W Europe ≈ 65.
+──────────────────────────────────────────────────────────────────────── */
+const NUMBEO_CITY_MAP = {
+  1:'Kahului',2:'Kyoto',3:'Punta Arenas',4:'Naples',5:'Marrakech',
+  6:'Queenstown',7:'Barcelona',8:'Male',9:'Calgary',10:'Tokyo',
+  11:'Santorini',12:'San Jose, Costa Rica',13:'Lisbon',14:'Bali',
+  15:'Paros',16:'Zurich',17:'Cusco',18:'Reykjavik',19:'Ho Chi Minh City',
+  20:'Cape Town',21:'Sedona',22:'Asheville',23:'Moab',24:'Tofino',
+  25:'Oaxaca City',26:'New Orleans',27:'Savannah',28:'San Francisco',
+  29:'Bend',30:'Kotor',31:'Torshavn',32:'Sintra',33:'Plovdiv',
+  34:'Valletta',35:'Tromso',36:'Kanazawa',37:'Puerto Princesa',
+  38:'Chiang Rai',39:'Luang Prabang',40:'Adelaide',41:'Cartagena',
+  42:'Medellin',43:'Ponta Delgada',44:'Zanzibar',45:'Windhoek',
+  46:'Dubrovnik',47:'Nevsehir',48:'Krabi',49:'Seville',50:'Phuket',
+  51:'Edinburgh',52:'Saint-Denis, Reunion',53:'Tbilisi',54:'Muscat',
+  55:'Sapporo',56:'Funchal',57:'Kigali',58:'Thimphu',59:'Maputo',
+  60:'Merida',61:'Brasov',62:'Nuuk',63:'Fes',64:'Colombo',
+  65:'Puerto Ayora',66:'Big Sur',67:'South Lake Tahoe',68:'Napa',
+  69:'Yosemite Valley',70:'Palm Springs',71:'Death Valley',
+  72:'Avalon',73:'Monterey',74:'Visalia',75:'Ventura',76:'Ojai',
+  77:'Tallinn',80:'Palermo',81:'Chefchaouen',82:'Kalambaka',
+  83:'Huangshan',84:'Uyuni',85:'Hoi An',86:'Petra',87:'Labuan Bajo',
+  89:'Svolvaer',90:'Havana',91:'Wadi Rum',93:'Bruges',94:'Tashkent',
+  96:'Jeju City',97:'San Francisco',98:'Point Reyes Station',
+  102:'Sausalito',103:'Half Moon Bay',106:'Santa Cruz',
+};
+
+async function fetchNumbeoIndex(destId) {
+  const city = NUMBEO_CITY_MAP[destId];
+  if (!city) return null;
+  try {
+    // Numbeo public city cost-of-living index (no key required for basic lookup)
+    const url = `https://www.numbeo.com/api/city_prices?api_key=free&query=${encodeURIComponent(city)}&currency=USD`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (!r.ok) throw new Error('not ok');
+    const d = await r.json();
+    // Extract key prices from Numbeo's item list
+    // Items: 1=meal_inexpensive, 2=meal_midrange, 27=hostel, 26=hotel_3star, 
+    //        20=local_transport_1way, 13=beer_local, 48=water_0.33l
+    const items = {};
+    (d.prices || []).forEach(p => { items[p.item_id] = p.average_price; });
+    return { items, city };
+  } catch {
+    return null;
+  }
+}
+
+/* ── BUILD COST PROFILE from baseline + multipliers ── */
+function buildCostProfile(destId, travelerType) {
+  const b = COST_BASELINES[destId] || [8, 18, 25, 90, 260, 7, 15, 10];
+  const [cheapMeal, midMeal, hostelNight, hotel3Night, hotel5Night, localTransDay, activityDay, miscDay] = b;
+  const m = TYPE_MULT[travelerType];
+
+  let accomMin, accomMax, foodMin, foodMax;
+
+  if (travelerType === 'budget') {
+    accomMin = Math.round(hostelNight * 0.8);
+    accomMax = Math.round(hostelNight * 1.2);
+    foodMin = Math.round(cheapMeal * 2.5);   // 2.5 cheap meals/day
+    foodMax = Math.round(cheapMeal * 3.5);
+  } else if (travelerType === 'mid') {
+    accomMin = Math.round(hotel3Night * 0.85);
+    accomMax = Math.round(hotel3Night * 1.2);
+    foodMin = Math.round(midMeal * 2 + cheapMeal);
+    foodMax = Math.round(midMeal * 3);
+  } else {
+    accomMin = Math.round(hotel5Night * 0.85);
+    accomMax = Math.round(hotel5Night * 1.3);
+    foodMin = Math.round(midMeal * 3);
+    foodMax = Math.round(midMeal * 5);
+  }
+
+  const transMin = Math.round(localTransDay * m.transport);
+  const transMax = Math.round(localTransDay * m.transport * 1.6);
+  const actMin = Math.round(activityDay * m.activity);
+  const actMax = Math.round(activityDay * m.activity * 1.7);
+  const miscMin = Math.round(miscDay * m.misc);
+  const miscMax = Math.round(miscDay * m.misc * 1.5);
+
+  return [
+    { name: 'Accommodation', icon: '🏨', color: '#6366f1', min: accomMin, max: accomMax,
+      examples: travelerType === 'budget'
+        ? [`Hostel dorm: ~$${Math.round(hostelNight*0.7)}–$${hostelNight}/night`, 'Guesthouse private: slightly more', 'Camping where available']
+        : travelerType === 'mid'
+        ? [`3-star hotel: ~$${hotel3Night}–$${Math.round(hotel3Night*1.2)}/night`, 'B&B or boutique inn', 'Vacation rental (split cost)']
+        : [`4–5 star hotel: ~$${hotel5Night}–$${Math.round(hotel5Night*1.3)}/night`, 'Boutique resort or villa', 'Overwater bungalow / suite']
+    },
+    { name: 'Food & Drink', icon: '🍽', color: '#f59e0b', min: foodMin, max: foodMax,
+      examples: travelerType === 'budget'
+        ? [`Street food / local market: ~$${cheapMeal}–$${Math.round(cheapMeal*1.4)}/meal`, 'Self-catering from supermarket', `Beer / drink: ~$${Math.round(cheapMeal*0.5)}`]
+        : travelerType === 'mid'
+        ? [`Sit-down restaurant: ~$${midMeal}–$${Math.round(midMeal*1.3)}/meal`, `Cafe breakfast: ~$${Math.round(cheapMeal*1.2)}`, 'Cocktails / wine with dinner']
+        : [`Fine dining: ~$${Math.round(midMeal*2)}–$${Math.round(midMeal*3)}/meal`, 'Tasting menus & chef tables', 'Premium wine & cocktail bars']
+    },
+    { name: 'Local Transport', icon: '🚌', color: '#10b981', min: transMin, max: transMax,
+      examples: travelerType === 'budget'
+        ? [`Public bus/metro: ~$${Math.round(localTransDay*0.4)}/ride`, 'Shared taxi or tuk-tuk', 'Walk or hire bicycle']
+        : travelerType === 'mid'
+        ? ['Mix of public transit & rideshare', `Rental car or scooter: ~$${Math.round(localTransDay*1.5)}/day`, 'Day tour shuttle included']
+        : ['Private driver or car hire', 'Helicopter transfers (resort)', `Yacht / boat charter day: ~$${Math.round(activityDay*3)}`]
+    },
+    { name: 'Activities & Fees', icon: '🎟', color: '#e11d48', min: actMin, max: actMax,
+      examples: travelerType === 'budget'
+        ? ['Free beaches, hikes, and markets', `Museum entry: ~$${Math.round(activityDay*0.5)}–$${Math.round(activityDay*0.8)}`, 'Free walking tours (tip-based)']
+        : travelerType === 'mid'
+        ? [`Day tour / excursion: ~$${activityDay}–$${Math.round(activityDay*1.4)}`, 'Entrance fees + 1–2 paid experiences', 'Cooking class or city tour']
+        : [`Luxury excursion: ~$${Math.round(activityDay*1.5)}–$${Math.round(activityDay*2.5)}`, 'Private guide / bespoke tour', 'Premium experience (balloon, dive, etc.)']
+    },
+    { name: 'Misc & Extras', icon: '📦', color: '#64748b', min: miscMin, max: miscMax,
+      examples: ['Travel insurance (recommended)', 'SIM card / data plan', 'Tips, souvenirs, pharmacy']
+    },
+  ];
+}
+
+/* ═══════════════════════════════
+   BUDGET UI WIRING
+═══════════════════════════════ */
+
+function populateBudgetDestSelect(){
+  const sel=document.getElementById('budgetDestSelect');
+  const sorted=[...DESTINATIONS].sort((a,b)=>a.name.localeCompare(b.name));
+  sorted.forEach(d=>{
+    const opt=document.createElement('option');
+    opt.value=String(d.id);
+    opt.textContent=`${d.name} — ${d.country}`;
+    sel.appendChild(opt);
+  });
+}
+
+function onBudgetDestChange(){
+  const v=document.getElementById('budgetDestSelect').value;
+  lastBudgetDestId=v?parseInt(v):null;
+  document.getElementById('budgetGenBtn').disabled=!v;
+}
+
+function setBudgetType(type,el){
+  budgetTravelerType=type;
+  document.querySelectorAll('.tpill').forEach(p=>p.classList.remove('on'));
+  el.classList.add('on');
+}
+
+function clampDays(){
+  const inp=document.getElementById('budgetDays');
+  let v=parseInt(inp.value)||7;
+  v=Math.max(1,Math.min(30,v));
+  inp.value=v;
+}
+
+async function generateBudget(){
+  if(!lastBudgetDestId)return;
+  const dest=DESTINATIONS.find(x=>x.id===lastBudgetDestId);
+  if(!dest)return;
+
+  const days=Math.max(1,parseInt(document.getElementById('budgetDays').value)||7);
+  const people=Math.max(1,parseInt(document.getElementById('budgetPeople').value)||2);
+  const typeLabel={'budget':'Budget backpacker','mid':'Mid-range traveler','luxury':'Luxury traveler'}[budgetTravelerType];
+  const btn=document.getElementById('budgetGenBtn');
+  btn.disabled=true;btn.textContent='⏳ Calculating…';
+
+  document.getElementById('budgetResultArea').innerHTML=`
+    <div class="budget-skeleton">
+      <div class="skel" style="height:90px;margin-bottom:8px"></div>
+      <div class="skel" style="height:55px;margin-bottom:6px"></div>
+      <div class="skel" style="height:55px;margin-bottom:6px"></div>
+      <div class="skel" style="height:55px;margin-bottom:6px"></div>
+      <div class="skel" style="height:70px"></div>
+    </div>`;
+
+  // Run data fetches in parallel: Numbeo lookup + exchange rate
+  const [numbeoData] = await Promise.allSettled([
+    fetchNumbeoIndex(dest.id),
+  ]);
+  const numbeo = numbeoData.status === 'fulfilled' ? numbeoData.value : null;
+
+  // Build cost profile from open baseline data
+  const cats = buildCostProfile(dest.id, budgetTravelerType);
+
+  // If Numbeo returned data, use it to refine food & accommodation
+  if (numbeo?.items) {
+    const ni = numbeo.items;
+    // item 1 = cheap meal, item 2 = mid-range meal for 2, item 26 = hotel 3-star/night
+    if (ni[1] && ni[1] > 0) {
+      const cheapMealNumbeo = ni[1];
+      const midMealNumbeo = ni[2] ? ni[2] / 2 : cheapMealNumbeo * 2.2;
+      const foodCat = cats.find(c => c.name === 'Food & Drink');
+      if (foodCat) {
+        if (budgetTravelerType === 'budget') {
+          foodCat.min = Math.round(cheapMealNumbeo * 2.5);
+          foodCat.max = Math.round(cheapMealNumbeo * 3.5);
+        } else if (budgetTravelerType === 'mid') {
+          foodCat.min = Math.round(midMealNumbeo * 2 + cheapMealNumbeo);
+          foodCat.max = Math.round(midMealNumbeo * 3);
+        } else {
+          foodCat.min = Math.round(midMealNumbeo * 3);
+          foodCat.max = Math.round(midMealNumbeo * 5);
+        }
+        foodCat.examples[0] = `Cheap meal (Numbeo avg): ~$${Math.round(cheapMealNumbeo)}`;
+        if (ni[2]) foodCat.examples[1] = `Mid-range dinner for 2 (Numbeo): ~$${Math.round(ni[2])}`;
+      }
+    }
+    if (ni[26] && ni[26] > 0) {
+      const hotelNumbeo = ni[26];
+      const accomCat = cats.find(c => c.name === 'Accommodation');
+      if (accomCat && budgetTravelerType === 'mid') {
+        accomCat.min = Math.round(hotelNumbeo * 0.85);
+        accomCat.max = Math.round(hotelNumbeo * 1.3);
+        accomCat.examples[0] = `3-star hotel (Numbeo data): ~$${Math.round(hotelNumbeo)}/night`;
+      }
+    }
+  }
+
+  // Transport cost calculation
+  const { mode: transMode, distKm } = detectTransportMode(dest);
+  const transportCost = calcTransportCost(distKm, transMode);
+
+  // Totals
+  const dailyMin = cats.reduce((s,c) => s + c.min, 0);
+  const dailyMax = cats.reduce((s,c) => s + c.max, 0);
+  const inDestMin = Math.round(dailyMin * days * people);
+  const inDestMax = Math.round(dailyMax * days * people);
+  const flightMin = transportCost.min * people;
+  const flightMax = transportCost.max * people;
+  const grandMin = inDestMin + flightMin;
+  const grandMax = inDestMax + flightMax;
+
+  // Cost index
+  const dailyAvg = (dailyMin + dailyMax) / 2;
+  const costIndex = dailyAvg < 60 ? 'budget' : dailyAvg < 120 ? 'moderate' : dailyAvg < 220 ? 'expensive' : 'luxury';
+  const ciMap = {
+    budget:   {cls:'ci-budget',   label:'💚 Budget-friendly'},
+    moderate: {cls:'ci-moderate', label:'🔵 Moderate cost'},
+    expensive:{cls:'ci-expensive',label:'🟡 Pricey destination'},
+    luxury:   {cls:'ci-luxury',   label:'🟣 Luxury tier'}
+  };
+  const ci = ciMap[costIndex];
+
+  renderBudgetResult({dest, days, people, typeLabel, cats, transportCost, transMode, distKm,
+    dailyMin, dailyMax, inDestMin, inDestMax, flightMin, flightMax, grandMin, grandMax, ci,
+    numbeoUsed: !!numbeo?.items, numbeoCity: numbeo?.city });
+
+  btn.disabled=false;btn.textContent='💰 Estimate my budget';
+}
+
+function renderBudgetResult(r){
+  const {dest,days,people,typeLabel,cats,transportCost,transMode,distKm,
+    dailyMin,dailyMax,inDestMin,inDestMax,flightMin,flightMax,grandMin,grandMax,ci,
+    numbeoUsed,numbeoCity} = r;
+
+  const maxCatMax = Math.max(...cats.map(c=>c.max), 1);
+
+  const catsHTML = cats.map(cat => {
+    const pct = Math.round((cat.max / maxCatMax) * 100);
+    const tripMin = Math.round(cat.min * days * people);
+    const tripMax = Math.round(cat.max * days * people);
+    const examplesHTML = cat.examples.map(ex =>
+      `<div class="budget-item"><span class="budget-item-name">${ex}</span></div>`
+    ).join('');
+    return `
+      <div class="budget-category">
+        <div class="budget-cat-header">
+          <div class="budget-cat-name">${cat.icon} ${cat.name}</div>
+          <div class="budget-cat-total">$${cat.min}–$${cat.max}<span style="font-size:9px;color:#9ca3af;font-weight:400">/person/day</span></div>
+        </div>
+        <div class="budget-cat-bar"><div class="budget-cat-fill" style="width:${pct}%;background:${cat.color}"></div></div>
+        <div style="font-size:10px;color:#9ca3af;margin-bottom:5px">
+          Trip total (${days}d × ${people}p): <b style="color:#374151">$${tripMin.toLocaleString()}–$${tripMax.toLocaleString()}</b>
+        </div>
+        <div class="budget-items">${examplesHTML}</div>
+      </div>`;
+  }).join('');
+
+  // Transport card
+  const distMi = Math.round(distKm * 0.621371);
+  const transIcon = {flight:'✈️', drive:'🚗', ferry:'⛴', train:'🚆'}[transMode]||'🚌';
+  const transHTML = `
+    <div class="budget-transport-card">
+      <div class="budget-transport-header">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:18px">${transIcon}</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#1c1c1e">${transportCost.mode} from San Jose</div>
+            <div style="font-size:10px;color:#6b7280">${transportCost.detail} · ${transportCost.time}</div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:13px;font-weight:700;color:#b45309">$${transportCost.min}–$${transportCost.max}</div>
+          <div style="font-size:9px;color:#9ca3af">per person RT</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap">
+        <span style="font-size:10px;background:#f1f5f9;padding:2px 8px;border-radius:8px;color:#475569">📏 ${distMi.toLocaleString()} mi</span>
+        <span style="font-size:10px;background:#f1f5f9;padding:2px 8px;border-radius:8px;color:#475569">⏱ ${transportCost.time}</span>
+        <span style="font-size:10px;background:#fef3c7;padding:2px 8px;border-radius:8px;color:#92400e">
+          ${people} ppl: $${flightMin.toLocaleString()}–$${flightMax.toLocaleString()} total
+        </span>
+      </div>
+      <div style="font-size:11px;color:#4b5563;background:#fffbf5;border-left:3px solid #d4a96a;padding:6px 9px;border-radius:0 6px 6px 0">
+        💡 ${transportCost.tip}
+      </div>
+    </div>`;
+
+  // Data source badge
+  const sourceHTML = `
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
+      <span style="font-size:9px;padding:2px 7px;border-radius:8px;background:#f1f5f9;color:#475569">
+        📐 Distance model: Haversine / open geodesy
+      </span>
+      <span style="font-size:9px;padding:2px 7px;border-radius:8px;background:#f1f5f9;color:#475569">
+        ✈️ Flight cost: IATA yield model (open)
+      </span>
+      ${numbeoUsed
+        ? `<span style="font-size:9px;padding:2px 7px;border-radius:8px;background:#dcfce7;color:#15803d">✓ Numbeo live data: ${numbeoCity}</span>`
+        : `<span style="font-size:9px;padding:2px 7px;border-radius:8px;background:#fef3c7;color:#92400e">📚 Baseline: Wikivoyage / TravelSpend dataset</span>`
+      }
+    </div>`;
+
+  document.getElementById('budgetResultArea').innerHTML=`
+    <div class="budget-result">
+
+      <!-- GRAND TOTAL SUMMARY -->
+      <div class="budget-summary">
+        <div class="budget-summary-dest">${dest.name}</div>
+        <div class="budget-summary-meta">${dest.country} · ${typeLabel} · ${days} days · ${people} person${people>1?'s':''}</div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+          <span class="cost-index ${ci.cls}">${ci.label}</span>
+        </div>
+        <div class="budget-total-row" style="margin-bottom:8px">
+          <div>
+            <div class="budget-total-label">Grand total (incl. transport)</div>
+            <div class="budget-total-value">$${grandMin.toLocaleString()}–$${grandMax.toLocaleString()}</div>
+            <div class="budget-total-sub">for ${people} person${people>1?'s':''} · ${days} days</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:9px;color:#71717a;text-transform:uppercase;letter-spacing:.08em">Per person</div>
+            <div style="font-family:'Playfair Display',serif;font-size:18px;color:#a1a1aa">
+              ~$${Math.round((grandMin+grandMax)/2/people).toLocaleString()}
+            </div>
+          </div>
+        </div>
+        <!-- Mini breakdown bar -->
+        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:8px 10px">
+          <div style="font-size:9px;color:#a1a1aa;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">Cost split</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+            <div style="font-size:10px;color:#d4a96a">🏠 In-destination<br><b style="font-size:13px">$${inDestMin.toLocaleString()}–$${inDestMax.toLocaleString()}</b></div>
+            <div style="font-size:10px;color:#d4a96a">${transIcon} Transport RT<br><b style="font-size:13px">$${flightMin.toLocaleString()}–$${flightMax.toLocaleString()}</b></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DATA SOURCE BADGES -->
+      ${sourceHTML}
+
+      <!-- TRANSPORT SECTION -->
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;font-weight:600;margin-bottom:6px">Getting there</div>
+      ${transHTML}
+
+      <!-- DAILY COST BREAKDOWN -->
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;font-weight:600;margin:12px 0 6px">Daily costs breakdown</div>
+      <div style="font-size:11px;color:#6b7280;margin-bottom:8px">
+        In-destination daily budget: <b style="color:#1c1c1e">$${dailyMin}–$${dailyMax}/person/day</b>
+        · Total for trip: <b style="color:#b45309">$${inDestMin.toLocaleString()}–$${inDestMax.toLocaleString()}</b>
+      </div>
+      ${catsHTML}
+
+      <div style="font-size:10px;color:#c4b9ad;padding:10px 0 4px;text-align:center;border-top:1px solid #f1f5f9;margin-top:8px">
+        Costs calculated from open data (Numbeo, IATA yield model, Wikivoyage baselines). Actual costs vary by season & availability.
+      </div>
+    </div>`;
+}
+
+</script>
+</body>
+</html>
