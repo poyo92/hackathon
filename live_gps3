@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Vacation Idea Planner</title>
+<link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Inter',sans-serif;background:#f7f3ee;color:#1c1c1e}
+.app{display:flex;flex-direction:column;max-width:1200px;margin:0 auto;height:100vh;min-height:600px;background:#fff;box-shadow:0 4px 32px rgba(0,0,0,.1)}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;gap:12px;padding:12px 20px;background:#1c1c1e;color:#fff;flex-shrink:0;z-index:20}
+.topbar-logo{font-family:'Playfair Display',serif;font-size:18px;font-weight:600;letter-spacing:.01em;color:#fff}
+.topbar-logo span{color:#d4a96a}
+.dot{width:7px;height:7px;border-radius:50%;background:#34d399;flex-shrink:0}
+.dot.busy{background:#fbbf24;animation:blink 1s infinite}
+.dot.err{background:#f87171}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+#statusText{font-size:12px;font-weight:400;color:#a1a1aa}
+#coordsText{margin-left:auto;font-size:11px;color:#71717a;font-family:'Courier New',monospace}
+
+/* BODY */
+.body{display:grid;grid-template-columns:280px 1fr 320px;flex:1;min-height:0;overflow:hidden}
+
+/* LEFT PANEL */
+.side{border-right:1px solid #e5e7eb;display:flex;flex-direction:column;overflow:hidden;background:#fafaf9}
+.sec{padding:14px 15px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.stitle{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin-bottom:10px}
+.weather-hero{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.w-icon{font-size:32px;line-height:1}
+.w-temp{font-family:'Playfair Display',serif;font-size:30px;font-weight:400;color:#1c1c1e}
+.w-sub{font-size:11px;color:#6b7280;margin-top:2px}
+.loc-name{font-size:13px;font-weight:600;color:#374151;margin-bottom:8px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.tile{background:#fff;border-radius:8px;padding:8px 10px;border:1px solid #e5e7eb}
+.tl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af}
+.tv{font-size:13px;font-weight:500;font-family:'Courier New',monospace;margin-top:2px;color:#1c1c1e}
+
+/* VIBES — vacation type chips */
+.vibe-chips{display:flex;flex-wrap:wrap;gap:5px;padding:12px 15px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.vchip{font-size:10px;padding:4px 10px;border-radius:20px;border:1px solid #e5e7eb;background:#fff;color:#374151;cursor:pointer;transition:all .15s;white-space:nowrap}
+.vchip:hover{border-color:#9ca3af}
+.vchip.on{background:#1c1c1e;color:#fff;border-color:#1c1c1e}
+
+/* DESTINATION CARDS */
+.dest-scroll{flex:1;overflow-y:auto;padding:10px 12px}
+.dest-card{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:7px;cursor:pointer;transition:all .15s;background:#fff}
+.dest-card:hover{border-color:#9ca3af;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.dest-card.selected{border-color:#d4a96a;background:#fffbf5}
+.dest-card.selected .dname{color:#b45309}
+.dname{font-size:13px;font-weight:600;color:#1c1c1e;margin-bottom:3px}
+.dcountry{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
+.dmeta{font-size:11px;color:#6b7280;line-height:1.5}
+.dtags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.dtag{font-size:9px;padding:2px 7px;border-radius:10px;font-weight:500}
+.dtag-beach{background:#dbeafe;color:#1d4ed8}
+.dtag-adventure{background:#dcfce7;color:#15803d}
+.dtag-culture{background:#fef3c7;color:#92400e}
+.dtag-city{background:#ede9fe;color:#5b21b6}
+.dtag-nature{background:#d1fae5;color:#065f46}
+.dtag-luxury{background:#fce7f3;color:#9d174d}
+.dtag-food{background:#fee2e2;color:#991b1b}
+.nores{font-size:12px;color:#9ca3af;font-style:italic;text-align:center;padding:24px 10px}
+.ghost{color:#9ca3af;font-style:italic}
+
+/* MAP */
+.maincol{display:flex;flex-direction:column;min-height:0;border-right:1px solid #e5e7eb}
+#map{flex:1;min-height:0}
+.attr-bar{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:#fff;border-top:1px solid #e5e7eb;flex-shrink:0;flex-wrap:wrap;gap:6px}
+.legend{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:4px;font-size:10px;color:#6b7280}
+.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.attr-text{font-size:10px;color:#9ca3af}
+.attr-text a{color:#6b7280;text-decoration:none}
+
+/* BOTTOM AI PANEL */
+.btmpanel{padding:12px 15px;border-top:1px solid #e5e7eb;flex-shrink:0;background:#fff}
+.brow{display:flex;gap:7px;margin-bottom:8px}
+button{font-family:'Inter',sans-serif;font-size:12px;font-weight:500;padding:7px 12px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#374151;cursor:pointer;transition:all .15s;white-space:nowrap}
+button:hover:not(:disabled){background:#f9fafb;border-color:#9ca3af}
+button:disabled{opacity:.35;cursor:not-allowed}
+.btn-primary{background:#1c1c1e;color:#fff;border-color:#1c1c1e}
+.btn-primary:hover:not(:disabled){background:#2d2d30;border-color:#2d2d30}
+.btn-gold{background:#d4a96a;color:#fff;border-color:#d4a96a}
+.btn-gold:hover:not(:disabled){background:#c49558;border-color:#c49558}
+.aibox{font-size:12px;color:#374151;line-height:1.7;padding:10px 12px;background:#fafaf9;border-radius:8px;border:1px solid #e5e7eb;min-height:44px}
+.aibox b{color:#1c1c1e;font-weight:600}
+
+/* RIGHT PANEL */
+.rpanel{display:flex;flex-direction:column;overflow:hidden;background:#fff}
+.rtabs{display:flex;border-bottom:1px solid #e5e7eb;flex-shrink:0;background:#fafaf9}
+.rtab{flex:1;padding:10px 6px;font-size:11px;font-weight:600;color:#6b7280;cursor:pointer;text-align:center;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.rtab:hover{color:#374151;background:#f3f4f6}
+.rtab.active{color:#1c1c1e;border-bottom-color:#d4a96a;background:#fff}
+.tab-pane{display:none;flex-direction:column;flex:1;overflow:hidden}
+.tab-pane.active{display:flex}
+
+/* DETAIL TAB */
+.detail-hero{padding:15px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.detail-empty{padding:24px 15px;font-size:12px;color:#9ca3af;text-align:center;font-style:italic}
+.detail-name{font-family:'Playfair Display',serif;font-size:19px;font-weight:600;color:#1c1c1e;margin-bottom:2px}
+.detail-loc{font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.09em;margin-bottom:10px}
+.detail-desc{font-size:12px;color:#4b5563;line-height:1.65;margin-bottom:12px}
+.detail-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+.dstat{background:#fafaf9;border-radius:8px;padding:8px 10px;border:1px solid #e5e7eb}
+.dstat-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:#9ca3af;margin-bottom:2px}
+.dstat-val{font-size:13px;font-weight:600;color:#1c1c1e}
+.detail-score{display:flex;align-items:center;gap:6px;margin-bottom:12px}
+.score-bar{flex:1;height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden}
+.score-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#d4a96a,#b45309)}
+.score-lbl{font-size:11px;font-weight:600;color:#92400e}
+.detail-actions{display:flex;gap:6px;flex-wrap:wrap}
+.detail-ai{padding:12px 15px;border-top:1px solid #e5e7eb;flex-shrink:0}
+.aiinner{font-size:12px;color:#374151;line-height:1.65;padding:10px 12px;background:#fafaf9;border-radius:8px;border:1px solid #e5e7eb;min-height:42px;max-height:140px;overflow-y:auto}
+.aiinner b{color:#1c1c1e;font-weight:600}
+
+/* ITINERARY TAB */
+.itin-header{padding:12px 15px;border-bottom:1px solid #e5e7eb;flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+.itin-scroll{flex:1;overflow-y:auto;padding:10px 12px}
+.itin-card{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:7px;background:#fff;display:flex;align-items:flex-start;gap:10px}
+.itin-num{width:24px;height:24px;border-radius:50%;background:#1c1c1e;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.itin-body{flex:1;min-width:0}
+.itin-name{font-size:12px;font-weight:600;color:#1c1c1e;margin-bottom:2px}
+.itin-meta{font-size:11px;color:#6b7280}
+.itin-remove{cursor:pointer;color:#d1d5db;font-size:16px;line-height:1;flex-shrink:0;padding:2px 4px;border-radius:4px}
+.itin-remove:hover{color:#f87171;background:#fef2f2}
+.itin-empty{font-size:12px;color:#9ca3af;text-align:center;padding:32px 15px;font-style:italic;line-height:1.7}
+.itin-footer{padding:12px 15px;border-top:1px solid #e5e7eb;flex-shrink:0}
+.itin-plan-btn{width:100%;padding:10px;font-size:12px;font-weight:600;border-radius:8px;border:none;background:#1c1c1e;color:#fff;cursor:pointer;font-family:'Inter',sans-serif;transition:opacity .15s}
+.itin-plan-btn:hover{opacity:.82}
+.itin-plan-btn:disabled{opacity:.3;cursor:not-allowed}
+
+/* WEATHER MATCH TAB */
+.wm-header{padding:12px 15px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.wm-scroll{flex:1;overflow-y:auto;padding:10px 12px}
+.wm-card{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:7px;cursor:pointer;background:#fff;transition:all .15s}
+.wm-card:hover{border-color:#d4a96a;background:#fffbf5}
+.wm-card.best{border-color:#34d399;background:#f0fdf4}
+.wm-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:3px}
+.wm-name{font-size:12px;font-weight:600;color:#1c1c1e}
+.wmbadge{font-size:9px;padding:2px 7px;border-radius:8px;font-weight:600}
+.wmbadge-best{background:#dcfce7;color:#15803d}
+.wmbadge-good{background:#dbeafe;color:#1d4ed8}
+.wmbadge-fair{background:#fef3c7;color:#92400e}
+.wm-sub{font-size:11px;color:#6b7280}
+.wm-bar{height:3px;background:#e5e7eb;border-radius:2px;margin-top:6px;overflow:hidden}
+.wm-fill{height:100%;border-radius:2px;transition:width .5s}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:11px;height:11px;border:1.5px solid #d1d5db;border-top-color:#6b7280;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:5px}
+.maplibregl-popup-content{font-family:'Inter',sans-serif;font-size:12px;padding:10px 12px;border-radius:8px;min-width:160px;max-width:240px;line-height:1.5}
+.maplibregl-popup-content b{font-size:13px;display:block;margin-bottom:3px}
+.pmeta-popup{font-size:11px;color:#6b7280;margin-top:2px}
+@media(max-width:900px){.body{grid-template-columns:1fr}.side,.maincol{border-right:none;border-bottom:1px solid #e5e7eb}.rpanel{max-height:400px}}
+
+/* ── RADIUS PLUGIN ── */
+.radius-toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#fffbf5;border-top:1px solid #e5e7eb;flex-shrink:0;flex-wrap:wrap}
+.radius-toolbar label{font-size:11px;color:#6b7280;white-space:nowrap}
+#radiusSlider{flex:1;min-width:80px;max-width:160px;accent-color:#d4a96a;cursor:pointer}
+#radiusVal{font-size:11px;font-weight:600;color:#b45309;min-width:52px;font-family:'Courier New',monospace}
+.btn-radius{background:#d4a96a;color:#fff;border:none;font-size:11px;padding:6px 11px;border-radius:7px;cursor:pointer;font-weight:600;transition:opacity .15s;white-space:nowrap}
+.btn-radius:hover{opacity:.82}
+.btn-radius.active{background:#1c1c1e}
+.btn-radius:disabled{opacity:.35;cursor:not-allowed}
+
+/* RADIUS RESULTS PANEL */
+.radius-panel{position:absolute;bottom:130px;left:50%;transform:translateX(-50%);width:min(460px,90vw);background:#fff;border:1px solid #d4a96a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:100;display:none;flex-direction:column;max-height:320px}
+.radius-panel.open{display:flex}
+.radius-panel-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.radius-panel-title{font-size:13px;font-weight:600;color:#1c1c1e}
+.radius-panel-close{cursor:pointer;font-size:18px;color:#9ca3af;line-height:1;padding:2px 5px;border-radius:4px;border:none;background:none}
+.radius-panel-close:hover{color:#f87171;background:#fef2f2}
+.radius-panel-body{padding:12px 14px;overflow-y:auto;font-size:12px;color:#374151;line-height:1.7}
+.radius-panel-body b{color:#1c1c1e}
+.radius-cat{margin-bottom:10px}
+.radius-cat-title{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#d4a96a;font-weight:700;margin-bottom:4px}
+.radius-idea{padding:5px 8px;background:#fafaf9;border-radius:6px;margin-bottom:3px;border-left:3px solid #d4a96a;font-size:12px}
+
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="topbar">
+    <div class="dot busy" id="dot"></div>
+    <div class="topbar-logo">wander<span>·ai</span></div>
+    <span id="statusText">Getting your location…</span>
+    <span id="coordsText">—</span>
+  </div>
+
+  <div class="body">
+
+    <!-- LEFT: weather + destination browser -->
+    <div class="side">
+      <div class="sec">
+        <div class="stitle">Your conditions</div>
+        <div id="weatherPanel"><span class="ghost" style="font-size:12px">Waiting for GPS…</span></div>
+      </div>
+      <div class="vibe-chips" id="vibeChips">
+        <span class="vchip on" onclick="setVibe('all',this)">All</span>
+        <span class="vchip" onclick="setVibe('beach',this)">🏖 Beach</span>
+        <span class="vchip" onclick="setVibe('adventure',this)">🧗 Adventure</span>
+        <span class="vchip" onclick="setVibe('culture',this)">🏛 Culture</span>
+        <span class="vchip" onclick="setVibe('city',this)">🌆 City</span>
+        <span class="vchip" onclick="setVibe('nature',this)">🌿 Nature</span>
+        <span class="vchip" onclick="setVibe('luxury',this)">✨ Luxury</span>
+        <span class="vchip" onclick="setVibe('food',this)">🍜 Food</span>
+      </div>
+      <div class="dest-scroll" id="destList">
+        <div class="nores">Loading destinations…</div>
+      </div>
+    </div>
+
+    <!-- CENTER: map -->
+    <div class="maincol" style="position:relative">
+      <div id="map"></div>
+
+      <!-- Floating radius results panel -->
+      <div class="radius-panel" id="radiusPanel">
+        <div class="radius-panel-head">
+          <div class="radius-panel-title">📍 Local Area Ideas <span id="radiusPanelSub" style="font-size:10px;color:#9ca3af;font-weight:400"></span></div>
+          <button class="radius-panel-close" onclick="closeRadiusPanel()">×</button>
+        </div>
+        <div class="radius-panel-body" id="radiusPanelBody"><span class="ghost">Generating ideas…</span></div>
+      </div>
+
+      <div class="attr-bar">
+        <div class="legend">
+          <div class="li"><div class="ld" style="background:#1d4ed8"></div>Beach</div>
+          <div class="li"><div class="ld" style="background:#15803d"></div>Nature</div>
+          <div class="li"><div class="ld" style="background:#7c3aed"></div>Culture</div>
+          <div class="li"><div class="ld" style="background:#d4a96a"></div>City</div>
+          <div class="li"><div class="ld" style="background:#e11d48"></div>Adventure</div>
+        </div>
+        <div class="attr-text">© <a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> © <a href="https://openstreetmap.org/copyright" target="_blank">OSM</a></div>
+      </div>
+      <!-- RADIUS PLUGIN TOOLBAR -->
+      <div class="radius-toolbar">
+        <label>🔍 Local radius:</label>
+        <input type="range" id="radiusSlider" min="5" max="150" value="25" step="5" oninput="updateRadiusLabel()">
+        <span id="radiusVal">25 mi</span>
+        <button class="btn-radius" id="radiusBtn" onclick="toggleRadiusMode()" disabled>Draw radius</button>
+        <button class="btn-radius" id="radiusClearBtn" onclick="clearRadius()" style="background:#6b7280;display:none">Clear</button>
+      </div>
+      <div class="btmpanel">
+        <div class="stitle" style="margin-bottom:7px">AI vacation advisor</div>
+        <div class="brow">
+          <button class="btn-primary" id="aiBtn" onclick="runVacationAI()" disabled>✦ Recommend for my weather</button>
+          <button id="refreshBtn" onclick="startTracking()" disabled>↺ Refresh</button>
+        </div>
+        <div class="aibox" id="aiBox"><span class="ghost">Allow location access to get weather-matched vacation ideas.</span></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: tabs -->
+    <div class="rpanel">
+      <div class="rtabs">
+        <div class="rtab active" onclick="switchTab('detail',this)">📍 Destination</div>
+        <div class="rtab" onclick="switchTab('itinerary',this)">🗺 My Trip</div>
+        <div class="rtab" onclick="switchTab('match',this)">🌤 Weather Match</div>
+      </div>
+
+      <!-- DETAIL TAB -->
+      <div class="tab-pane active" id="tab-detail">
+        <div id="detailContent">
+          <div class="detail-empty">Select a destination on the map or list to see details and AI activity ideas.</div>
+        </div>
+        <div class="detail-ai" id="detailAi" style="display:none">
+          <div class="stitle" style="margin-bottom:5px">AI activity ideas</div>
+          <div class="aiinner" id="destAiBox"><span class="ghost">Select a destination first.</span></div>
+        </div>
+      </div>
+
+      <!-- ITINERARY TAB -->
+      <div class="tab-pane" id="tab-itinerary">
+        <div class="itin-header">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#1c1c1e">My Trip</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:1px" id="itinCount">No destinations added yet</div>
+          </div>
+          <button style="font-size:10px;padding:5px 9px;color:#9ca3af" onclick="clearItinerary()">Clear all</button>
+        </div>
+        <div class="itin-scroll" id="itinList">
+          <div class="itin-empty">Add destinations from the map or list.<br>Then generate a full AI itinerary!</div>
+        </div>
+        <div class="itin-footer">
+          <button class="itin-plan-btn" id="planBtn" disabled onclick="generateFullItinerary()">✦ Generate full AI itinerary</button>
+        </div>
+      </div>
+
+      <!-- WEATHER MATCH TAB -->
+      <div class="tab-pane" id="tab-match">
+        <div class="wm-header">
+          <div style="font-size:13px;font-weight:600;color:#1c1c1e">Weather-matched picks</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px" id="wmSubtitle">Based on your current conditions</div>
+        </div>
+        <div class="wm-scroll" id="wmList">
+          <div class="nores">Waiting for your location to score destinations…</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<script>
+/* ═══════════════════════════════
+   DESTINATIONS DATABASE
+═══════════════════════════════ */
+const DESTINATIONS = [
+  // ── NORTH AMERICA ──
+  {id:1,name:"Maui",country:"Hawaii, USA",lat:20.798,lon:-156.331,tags:["beach","nature","luxury"],best:"Apr–Oct",budget:"$$$",days:"7–10",climate:"Tropical",gem:false,desc:"Volcanic peaks meet white-sand beaches. Road to Hana, Haleakalā crater, and snorkeling with sea turtles.",pinColor:"#1d4ed8"},
+  {id:9,name:"Banff",country:"Alberta, Canada",lat:51.178,lon:-115.570,tags:["nature","adventure"],best:"Jun–Sep",climate:"Continental",budget:"$$",days:"5–7",gem:false,desc:"Turquoise glacial lakes, Rocky Mountain peaks, wildlife corridors, and the iconic Icefields Parkway.",pinColor:"#15803d"},
+  {id:12,name:"Costa Rica",country:"Central America",lat:9.748,lon:-83.753,tags:["nature","adventure","beach"],best:"Dec–Apr",budget:"$$",days:"8–12",climate:"Tropical",gem:false,desc:"Cloud forests, zip-lining, sloths, active volcanoes, and two coastlines of surf-ready waves.",pinColor:"#15803d"},
+  {id:21,name:"Sedona",country:"Arizona, USA",lat:34.869,lon:-111.761,tags:["nature","adventure","culture"],best:"Mar–May, Sep–Nov",budget:"$$",days:"3–5",climate:"Desert",gem:true,desc:"Red-rock buttes, vortex hiking trails, spiritual retreats, and some of the darkest skies in the Southwest.",pinColor:"#e11d48"},
+  {id:22,name:"Asheville",country:"North Carolina, USA",lat:35.595,lon:-82.551,tags:["culture","food","nature"],best:"Apr–Oct",budget:"$",days:"3–5",climate:"Humid continental",gem:true,desc:"Blue Ridge Parkway drives, craft brewery scene, the Biltmore Estate, and a thriving arts district.",pinColor:"#d4a96a"},
+  {id:23,name:"Moab",country:"Utah, USA",lat:38.573,lon:-109.549,tags:["adventure","nature"],best:"Mar–May, Sep–Oct",budget:"$",days:"4–6",climate:"Desert",gem:true,desc:"Arches and Canyonlands at golden hour, mountain biking the slickrock, and Colorado River rafting.",pinColor:"#e11d48"},
+  {id:24,name:"Tofino",country:"British Columbia, Canada",lat:49.153,lon:-125.907,tags:["beach","nature","adventure"],best:"May–Sep",budget:"$$",days:"4–6",climate:"Oceanic",gem:true,desc:"Wild Pacific surf, old-growth rainforest, grey whale watching, and some of Canada's best seafood.",pinColor:"#15803d"},
+  {id:25,name:"Oaxaca",country:"Mexico",lat:17.067,lon:-96.721,tags:["culture","food","city"],best:"Oct–Apr",budget:"$",days:"5–7",climate:"Semi-arid",gem:true,desc:"Mezcal distilleries, tlayudas, ancient Zapotec ruins at Monte Albán, and Day of the Dead celebrations.",pinColor:"#7c3aed"},
+  {id:26,name:"New Orleans",country:"Louisiana, USA",lat:29.951,lon:-90.071,tags:["city","food","culture"],best:"Feb–May",budget:"$$",days:"4–6",climate:"Humid subtropical",gem:false,desc:"Jazz on Frenchmen Street, beignets at Café Du Monde, voodoo history, and the most unique food city in America.",pinColor:"#d4a96a"},
+  {id:27,name:"Savannah",country:"Georgia, USA",lat:32.084,lon:-81.099,tags:["city","culture","food"],best:"Mar–May, Sep–Nov",budget:"$",days:"3–4",climate:"Humid subtropical",gem:true,desc:"Spanish moss-draped squares, antebellum mansions, ghost tours, and low-country boil on the waterfront.",pinColor:"#7c3aed"},
+  {id:28,name:"Mendocino",country:"California, USA",lat:39.305,lon:-123.799,tags:["nature","beach","food"],best:"Jun–Oct",budget:"$$",days:"3–4",climate:"Mediterranean",gem:true,desc:"Dramatic cliffside headlands, redwood groves, farm-to-table dining, and art galleries in a Victorian village.",pinColor:"#15803d"},
+  {id:29,name:"Bend",country:"Oregon, USA",lat:44.058,lon:-121.315,tags:["adventure","nature","food"],best:"Jun–Sep",budget:"$",days:"3–5",climate:"High desert",gem:true,desc:"Volcano hiking, whitewater kayaking, world-class craft beer, and ski runs on Mt. Bachelor.",pinColor:"#e11d48"},
+  // ── EUROPE ──
+  {id:4,name:"Amalfi Coast",country:"Italy",lat:40.634,lon:14.602,tags:["beach","culture","food","luxury"],best:"May–Jun, Sep",budget:"$$$",days:"5–8",climate:"Mediterranean",gem:false,desc:"Clifftop villages draped in bougainvillea, cerulean coves, and the world's finest limoncello.",pinColor:"#1d4ed8"},
+  {id:5,name:"Marrakech",country:"Morocco",lat:31.629,lon:-7.981,tags:["culture","food","city"],best:"Mar–May, Sep–Nov",budget:"$",days:"4–6",climate:"Semi-arid",gem:false,desc:"A sensory explosion of souks, riads, hammams, and spice markets. Gateway to the Sahara.",pinColor:"#7c3aed"},
+  {id:7,name:"Barcelona",country:"Spain",lat:41.385,lon:2.173,tags:["city","beach","culture","food"],best:"May–Jun, Sep",budget:"$$",days:"4–6",climate:"Mediterranean",gem:false,desc:"Gaudí's impossible architecture, world-class tapas, beaches, and nightlife that starts at midnight.",pinColor:"#d4a96a"},
+  {id:13,name:"Lisbon",country:"Portugal",lat:38.716,lon:-9.139,tags:["city","culture","food"],best:"Apr–Jun, Sep–Oct",budget:"$",days:"4–6",climate:"Mediterranean",gem:false,desc:"Trams rattling through hilly neighborhoods, pastéis de nata, Fado music, and Europe's best-value capital.",pinColor:"#d4a96a"},
+  {id:15,name:"Paros",country:"Greece",lat:37.087,lon:25.145,tags:["beach","food"],best:"Jun–Sep",budget:"$$",days:"5–7",climate:"Mediterranean",gem:true,desc:"The Cyclades secret: calm turquoise waters, charming fishing villages, and windmills without Santorini's crowds.",pinColor:"#1d4ed8"},
+  {id:16,name:"Swiss Alps",country:"Switzerland",lat:46.818,lon:8.228,tags:["adventure","nature","luxury"],best:"Jun–Sep, Dec–Mar",budget:"$$$$",days:"7–10",climate:"Alpine",gem:false,desc:"Train journeys through peaks, Grindelwald ski runs, glacier hiking, and the Matterhorn at golden hour.",pinColor:"#e11d48"},
+  {id:18,name:"Iceland",country:"North Atlantic",lat:64.963,lon:-19.021,tags:["nature","adventure"],best:"Jun–Aug, Nov–Feb",budget:"$$$",days:"7–10",climate:"Subarctic",gem:false,desc:"Northern Lights, midnight sun, geysers, black-sand beaches, whale watching, and natural hot springs.",pinColor:"#15803d"},
+  {id:30,name:"Kotor",country:"Montenegro",lat:42.424,lon:18.771,tags:["culture","nature","beach"],best:"May–Sep",budget:"$",days:"4–6",climate:"Mediterranean",gem:true,desc:"Walled medieval city inside a fjord-like bay, cat-filled alleys, and Venetian fortifications above turquoise water.",pinColor:"#7c3aed"},
+  {id:31,name:"Faroe Islands",country:"Denmark",lat:62.009,lon:-6.791,tags:["nature","adventure"],best:"Jun–Aug",budget:"$$$",days:"5–7",climate:"Subarctic oceanic",gem:true,desc:"Grass-roofed villages on sea cliffs, puffin colonies, dramatic waterfalls plunging into the North Atlantic.",pinColor:"#15803d"},
+  {id:32,name:"Sintra",country:"Portugal",lat:38.797,lon:-9.390,tags:["culture","nature","city"],best:"Apr–Oct",budget:"$",days:"2–3",climate:"Mediterranean",gem:true,desc:"Fairy-tale palaces perched on forested hilltops just 30 minutes from Lisbon — wildly underrated.",pinColor:"#7c3aed"},
+  {id:33,name:"Plovdiv",country:"Bulgaria",lat:42.150,lon:24.750,tags:["culture","city","food"],best:"Apr–Oct",budget:"$",days:"3–5",climate:"Humid continental",gem:true,desc:"Europe's oldest city: Roman amphitheaters, colorful Ottoman-era houses, and a booming craft beer and art scene.",pinColor:"#d4a96a"},
+  {id:34,name:"Valletta",country:"Malta",lat:35.900,lon:14.514,tags:["culture","city","beach"],best:"Apr–Jun, Sep–Oct",budget:"$",days:"3–5",climate:"Mediterranean",gem:true,desc:"Europe's smallest capital, dense with Baroque grandeur, knights' hospitals, and crystalline harbor swimming.",pinColor:"#7c3aed"},
+  {id:35,name:"Tromsø",country:"Norway",lat:69.649,lon:18.956,tags:["adventure","nature"],best:"Nov–Mar, Jun–Jul",budget:"$$$",days:"4–6",climate:"Subarctic",gem:true,desc:"Northern Lights capital of the world, husky sledding, reindeer encounters, and midnight-sun hikes in summer.",pinColor:"#15803d"},
+  // ── ASIA & PACIFIC ──
+  {id:2,name:"Kyoto",country:"Japan",lat:35.011,lon:135.768,tags:["culture","city","food"],best:"Mar–May, Oct–Nov",budget:"$$",days:"5–7",climate:"Temperate",gem:false,desc:"Temple gardens, geisha districts, matcha ceremonies, and bamboo groves. A living museum of Japanese tradition.",pinColor:"#7c3aed"},
+  {id:6,name:"Queenstown",country:"New Zealand",lat:-45.031,lon:168.663,tags:["adventure","nature"],best:"Dec–Feb",budget:"$$",days:"5–7",climate:"Oceanic",gem:false,desc:"The adventure capital of the world. Bungee, skydiving, skiing, and fjord cruises at the base of the Remarkables.",pinColor:"#e11d48"},
+  {id:8,name:"Maldives",country:"Indian Ocean",lat:4.175,lon:73.509,tags:["beach","luxury"],best:"Nov–Apr",budget:"$$$$",days:"7–10",climate:"Tropical",gem:false,desc:"Overwater bungalows above crystal lagoons. The world's flattest country is its most dreamy.",pinColor:"#1d4ed8"},
+  {id:10,name:"Tokyo",country:"Japan",lat:35.689,lon:139.692,tags:["city","culture","food"],best:"Mar–May, Sep–Nov",budget:"$$",days:"7–10",climate:"Humid subtropical",gem:false,desc:"The world's greatest megacity: ramen bars, robot restaurants, ancient shrines, and cutting-edge fashion.",pinColor:"#d4a96a"},
+  {id:14,name:"Bali",country:"Indonesia",lat:-8.409,lon:115.189,tags:["culture","beach","food","nature"],best:"Apr–Oct",budget:"$",days:"7–12",climate:"Tropical",gem:false,desc:"Rice terraces, Hindu temples, surf breaks, jungle waterfalls, and world-famous sunset cocktails.",pinColor:"#7c3aed"},
+  {id:19,name:"Vietnam",country:"Southeast Asia",lat:15.870,lon:107.992,tags:["culture","food","nature"],best:"Feb–Apr",budget:"$",days:"10–14",climate:"Tropical",gem:false,desc:"Ha Long Bay's emerald waters, Hội An's lantern-lit streets, Hà Nội's chaos, and pho for breakfast every day.",pinColor:"#d4a96a"},
+  {id:36,name:"Noto Peninsula",country:"Japan",lat:37.270,lon:137.122,tags:["culture","food","nature"],best:"Apr–Oct",budget:"$$",days:"4–6",climate:"Temperate",gem:true,desc:"Rural Japan at its purest: lacquerware workshops, rugged Sea of Japan coastline, and salt-fields at sunrise.",pinColor:"#7c3aed"},
+  {id:37,name:"Palawan",country:"Philippines",lat:9.834,lon:118.737,tags:["beach","nature","adventure"],best:"Nov–May",budget:"$",days:"7–10",climate:"Tropical",gem:true,desc:"Underground river world heritage site, hidden lagoons reachable only by kayak, and coral reefs teeming with life.",pinColor:"#1d4ed8"},
+  {id:38,name:"Chiang Rai",country:"Thailand",lat:19.910,lon:99.840,tags:["culture","nature","food"],best:"Nov–Feb",budget:"$",days:"4–6",climate:"Tropical",gem:true,desc:"The White Temple, Black House, hill-tribe villages, tea plantations, and the Golden Triangle — minus Bangkok's chaos.",pinColor:"#7c3aed"},
+  {id:39,name:"Luang Prabang",country:"Laos",lat:19.889,lon:102.135,tags:["culture","nature","food"],best:"Oct–Apr",budget:"$",days:"5–7",climate:"Tropical",gem:true,desc:"Saffron-robed monks at dawn, Kuang Si waterfalls, Mekong sunsets, and the quietest temple town in Southeast Asia.",pinColor:"#d4a96a"},
+  {id:40,name:"Kangaroo Island",country:"South Australia",lat:-35.775,lon:137.208,tags:["nature","adventure","beach"],best:"Oct–Apr",budget:"$$",days:"4–6",climate:"Mediterranean",gem:true,desc:"Sea lions napping on the beach, koalas in the wild, Remarkable Rocks, and artisan food producers.",pinColor:"#15803d"},
+  // ── SOUTH AMERICA & AFRICA ──
+  {id:3,name:"Patagonia",country:"Chile / Argentina",lat:-51.0,lon:-73.0,tags:["adventure","nature"],best:"Nov–Feb",budget:"$$$",days:"10–14",climate:"Subpolar",gem:false,desc:"Torres del Paine, Perito Moreno glacier, condors overhead. The ends of the Earth, unforgettably wild.",pinColor:"#15803d"},
+  {id:11,name:"Santorini",country:"Greece",lat:36.393,lon:25.461,tags:["beach","luxury","culture"],best:"May–Oct",budget:"$$$",days:"5–7",climate:"Mediterranean",gem:false,desc:"White-washed villages perched above the caldera, volcanic black-sand beaches, and iconic sunsets from Oia.",pinColor:"#1d4ed8"},
+  {id:17,name:"Peru",country:"South America",lat:-13.163,lon:-72.545,tags:["culture","adventure","nature"],best:"May–Sep",budget:"$$",days:"10–14",climate:"Varied",gem:false,desc:"Machu Picchu at dawn, Sacred Valley treks, Amazon river journeys, and the world's best ceviche.",pinColor:"#7c3aed"},
+  {id:20,name:"Cape Town",country:"South Africa",lat:-33.924,lon:18.424,tags:["city","adventure","beach","nature"],best:"Nov–Mar",budget:"$$",days:"7–10",climate:"Mediterranean",gem:false,desc:"Table Mountain, Boulders Beach penguins, Cape Winelands, and a city with a heart unlike any other.",pinColor:"#e11d48"},
+  {id:41,name:"Cartagena",country:"Colombia",lat:10.391,lon:-75.479,tags:["city","beach","culture","food"],best:"Dec–Apr",budget:"$",days:"4–6",climate:"Tropical",gem:true,desc:"Candy-colored colonial walled city, Caribbean islands a boat ride away, and ceviche by the glass.",pinColor:"#d4a96a"},
+  {id:42,name:"Medellín",country:"Colombia",lat:6.244,lon:-75.581,tags:["city","culture","food"],best:"Dec–Mar, Jun–Aug",budget:"$",days:"4–6",climate:"Spring-like year-round",gem:true,desc:"City of Eternal Spring: cable cars over comunas, street art, nightlife, and world-class coffee culture.",pinColor:"#7c3aed"},
+  {id:43,name:"Azores",country:"Portugal",lat:37.741,lon:-25.670,tags:["nature","adventure","beach"],best:"May–Oct",budget:"$$",days:"7–10",climate:"Oceanic",gem:true,desc:"Mid-Atlantic volcanic islands: whale watching, geothermal hot springs, crater lakes, and zero crowds.",pinColor:"#15803d"},
+  {id:44,name:"Zanzibar",country:"Tanzania",lat:-6.165,lon:39.202,tags:["beach","culture","food"],best:"Jun–Oct, Dec–Feb",budget:"$$",days:"5–8",climate:"Tropical",gem:true,desc:"Spice island with UNESCO Stone Town alleys, pristine Indian Ocean beaches, and dhow sunset cruises.",pinColor:"#1d4ed8"},
+  {id:45,name:"Namibia",country:"Southern Africa",lat:-22.957,lon:18.494,tags:["adventure","nature"],best:"May–Oct",budget:"$$$",days:"10–14",climate:"Desert",gem:true,desc:"Sossusvlei dunes glowing blood-red at dawn, cheetah encounters, Skeleton Coast, and the world's oldest desert.",pinColor:"#e11d48"},
+];
+
+const TAG_CLS = {beach:'dtag-beach',adventure:'dtag-adventure',culture:'dtag-culture',city:'dtag-city',nature:'dtag-nature',luxury:'dtag-luxury',food:'dtag-food'};
+
+/* ── DISTANCE UTILITIES ── */
+function haversineKm(lat1,lon1,lat2,lon2){
+  const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function haversineMi(lat1,lon1,lat2,lon2){return haversineKm(lat1,lon1,lat2,lon2)*0.621371;}
+function fmtDist(mi){return mi<1000?Math.round(mi)+' mi':Math.round(mi/100)/10+'k mi';}
+
+let distanceScores={};
+
+/* ═══════════════════════════════
+   STATE
+═══════════════════════════════ */
+let userLat, userLon, currentWeather = {}, map, destMarkers = {};
+let activeVibe = 'all', selectedDest = null, itinerary = [];
+let weatherScores = {};
+
+/* ═══════════════════════════════
+   BOOT
+═══════════════════════════════ */
+if(navigator.geolocation){
+  navigator.geolocation.getCurrentPosition(
+    p=>{userLat=p.coords.latitude;userLon=p.coords.longitude;startTracking();},
+    ()=>{setStatus('Location denied — defaulting to San Jose, CA','');userLat=37.3382;userLon=-121.8863;startTracking();},
+    {enableHighAccuracy:true,timeout:10000}
+  );
+}else{
+  setStatus('Geolocation unavailable','err');
+  userLat=37.3382;userLon=-121.8863;startTracking();
+}
+
+async function startTracking(){
+  setStatus('Fetching your location weather…','busy');
+  ['aiBtn','refreshBtn'].forEach(id=>document.getElementById(id).disabled=true);
+  try{
+    const [wx,geo]=await Promise.all([fetchWx(userLat,userLon),geocode(userLat,userLon)]);
+    const locName=geo.label!=='Unknown'?geo.label:'Your location';
+    renderWeather(wx,locName);
+    initMap(userLat,userLon);
+    document.getElementById('coordsText').textContent=Math.abs(userLat).toFixed(4)+'°'+(userLat>=0?'N':'S')+' '+Math.abs(userLon).toFixed(4)+'°'+(userLon>=0?'E':'W');
+    setStatus('Live — '+locName,'');
+    ['aiBtn','refreshBtn'].forEach(id=>document.getElementById(id).disabled=false);
+    scoreDestinations();
+    renderDestList();
+    renderWeatherMatch();
+  }catch(e){
+    setStatus('Weather fetch failed','err');
+    document.getElementById('weatherPanel').innerHTML='<span style="font-size:12px;color:#f87171">Could not load weather. Refresh to try again.</span>';
+    initMap(userLat,userLon);
+    renderDestList();
+  }
+}
+
+/* ═══════════════════════════════
+   WEATHER
+═══════════════════════════════ */
+const WMO={0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Icy fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Showers',81:'Heavy showers',82:'Violent showers',95:'Thunderstorm',96:'Thunderstorm+hail',99:'Thunderstorm+hail'};
+const WICO={0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌦️',55:'🌧️',61:'🌦️',63:'🌧️',65:'🌧️',71:'🌨️',73:'❄️',75:'❄️',80:'🌧️',81:'🌧️',82:'⛈️',95:'⛈️',96:'⛈️',99:'⛈️'};
+const wico=c=>WICO[c]||'🌡️', wdesc=c=>WMO[c]||'Unknown';
+
+async function fetchWx(lat,lon){
+  const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`);
+  if(!r.ok)throw new Error('wx');
+  return r.json();
+}
+
+async function geocode(lat,lon){
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}&format=json&zoom=10`,{headers:{'Accept-Language':'en'}});
+    const d=await r.json();const a=d.address||{};
+    const city=a.city||a.town||a.village||a.municipality||a.suburb||'';
+    if(!city)return{label:'Unknown'};
+    const state=a.state_code||'';
+    return{label:state?`${city}, ${state}`:city};
+  }catch{return{label:'Unknown'};}
+}
+
+function renderWeather(wx,name){
+  const c=wx.current;
+  const temp=Math.round(c.temperature_2m),feel=Math.round(c.apparent_temperature);
+  const hum=Math.round(c.relative_humidity_2m),wind=Math.round(c.wind_speed_10m);
+  const code=c.weather_code;
+  currentWeather={temp,feel,hum,wind,code,name};
+  document.getElementById('weatherPanel').innerHTML=`
+    <div class="loc-name">${name}</div>
+    <div class="weather-hero">
+      <div class="w-icon">${wico(code)}</div>
+      <div><div class="w-temp">${temp}°F</div><div class="w-sub">Feels ${feel}°F · ${wdesc(code)}</div></div>
+    </div>
+    <div class="g2">
+      <div class="tile"><div class="tl">Humidity</div><div class="tv">${hum}%</div></div>
+      <div class="tile"><div class="tl">Wind</div><div class="tv">${wind} mph</div></div>
+    </div>`;
+}
+
+/* ═══════════════════════════════
+   MAP
+═══════════════════════════════ */
+function initMap(lat,lon){
+  if(map){map.remove();map=null;destMarkers={};}
+  map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:[lon,lat],zoom:2.5,attributionControl:true});
+  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
+  const youEl=document.createElement('div');
+  youEl.style.cssText='width:16px;height:16px;border-radius:50%;background:#d4a96a;border:3px solid #fff;box-shadow:0 0 0 2px #d4a96a,0 2px 6px rgba(0,0,0,.3);cursor:pointer';
+  new maplibregl.Marker({element:youEl,anchor:'center'}).setLngLat([lon,lat]).setPopup(new maplibregl.Popup({offset:12}).setHTML('<b>📍 You are here</b>')).addTo(map);
+  map.on('load',()=>{
+    addDestinationMarkers();
+    document.getElementById('radiusBtn').disabled=false;
+  });
+  map.on('click',onMapClickForRadius);
+}
+
+function addDestinationMarkers(){
+  if(!map)return;
+  DESTINATIONS.forEach(d=>{
+    const el=document.createElement('div');
+    el.style.cssText='cursor:pointer;';
+    const score=weatherScores[d.id]||50;
+    el.innerHTML=`<svg width="28" height="38" viewBox="0 0 28 38" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.25));transition:transform .15s"><path d="M14 0C6.27 0 0 6.27 0 14c0 9.6 14 24 14 24S28 23.6 28 14C28 6.27 21.73 0 14 0z" fill="${d.pinColor}"/><circle cx="14" cy="14" r="8" fill="white"/><circle cx="14" cy="14" r="4" fill="${d.pinColor}"/></svg>`;
+    el.addEventListener('mouseenter',()=>el.querySelector('svg').style.transform='scale(1.2)');
+    el.addEventListener('mouseleave',()=>el.querySelector('svg').style.transform='scale(1)');
+    const popup=new maplibregl.Popup({offset:[0,-38],closeButton:true}).setHTML(`
+      <b>${d.name}</b>
+      <span style="font-size:10px;color:#6b7280">${d.country}</span>
+      <div class="pmeta-popup" style="margin-top:4px">${d.tags.map(t=>`<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:#f1f5f9;color:#475569;margin-right:3px">${t}</span>`).join('')}</div>
+      <div class="pmeta-popup">✈️ Best: ${d.best}</div>
+      <div class="pmeta-popup">📅 ${d.days} days · ${d.budget}</div>
+    `);
+    const marker=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([d.lon,d.lat]).setPopup(popup).addTo(map);
+    el.addEventListener('click',()=>selectDest(d.id));
+    destMarkers[d.id]=marker;
+  });
+}
+
+/* ═══════════════════════════════
+   DESTINATION LIST
+═══════════════════════════════ */
+function getFiltered(){
+  // Reference point: radius center if set, otherwise user home
+  const refLat=radiusCenter?radiusCenter.lat:(userLat||37.3382);
+  const refLon=radiusCenter?radiusCenter.lon:(userLon||-121.8863);
+  const radiusMi=radiusCenter?parseInt(document.getElementById('radiusSlider').value):null;
+
+  let dests=activeVibe==='all'?[...DESTINATIONS]:DESTINATIONS.filter(d=>d.tags.includes(activeVibe));
+
+  // If radius is active, prioritize destinations within it; sort all by distance from ref
+  dests=dests.map(d=>({...d,_dist:haversineMi(refLat,refLon,d.lat,d.lon)}))
+    .sort((a,b)=>{
+      // Inside radius: always first, sorted by distance
+      if(radiusMi){
+        const aIn=a._dist<=radiusMi, bIn=b._dist<=radiusMi;
+        if(aIn&&!bIn)return -1;
+        if(!aIn&&bIn)return 1;
+      }
+      return a._dist-b._dist;
+    });
+  return dests;
+}
+
+function setVibe(vibe,el){
+  activeVibe=vibe;
+  document.querySelectorAll('.vchip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  renderDestList();
+}
+
+function renderDestList(){
+  const list=document.getElementById('destList');
+  const refLat=radiusCenter?radiusCenter.lat:(userLat||37.3382);
+  const refLon=radiusCenter?radiusCenter.lon:(userLon||-121.8863);
+  const radiusMi=radiusCenter?parseInt(document.getElementById('radiusSlider').value):null;
+  const dests=getFiltered();
+  if(!dests.length){list.innerHTML='<div class="nores">No destinations match this filter.</div>';return;}
+  list.innerHTML='';
+
+  // Section header if radius active
+  if(radiusMi){
+    const inCount=dests.filter(d=>d._dist<=radiusMi).length;
+    if(inCount>0){
+      const hdr=document.createElement('div');
+      hdr.style.cssText='font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#d4a96a;font-weight:700;padding:4px 2px 6px';
+      hdr.textContent=`Within ${radiusMi} mi (${inCount})`;
+      list.appendChild(hdr);
+    }
+  }
+
+  let shownOutHeader=false;
+  dests.forEach(d=>{
+    const dist=d._dist;
+    const inRadius=radiusMi&&dist<=radiusMi;
+
+    // Divider between in-radius and out-of-radius
+    if(radiusMi&&!inRadius&&!shownOutHeader){
+      shownOutHeader=true;
+      const sep=document.createElement('div');
+      sep.style.cssText='font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af;font-weight:700;padding:10px 2px 6px;border-top:1px solid #e5e7eb;margin-top:4px';
+      sep.textContent='Further away';
+      list.appendChild(sep);
+    }
+
+    const el=document.createElement('div');
+    el.className='dest-card'+(selectedDest&&selectedDest.id===d.id?' selected':'');
+    const gemBadge=d.gem?'<span style="font-size:8px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-weight:600;margin-left:4px">💎 Hidden gem</span>':'';
+    const distBadge=`<span style="font-size:9px;color:${inRadius?'#15803d':'#9ca3af'};font-weight:${inRadius?'600':'400'};background:${inRadius?'#dcfce7':'#f3f4f6'};padding:1px 6px;border-radius:8px">${inRadius?'✓ ':''}${fmtDist(dist)}</span>`;
+    el.innerHTML=`
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:3px;margin-bottom:2px">
+        <div class="dname" style="margin:0">${d.name}</div>${gemBadge}
+      </div>
+      <div class="dcountry">${d.country}</div>
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
+        ${distBadge}
+        <span style="font-size:11px;color:#6b7280">${d.best} · ${d.days} days · ${d.budget}</span>
+      </div>
+      <div class="dtags">${d.tags.map(t=>`<span class="dtag ${TAG_CLS[t]||''}">${t}</span>`).join('')}</div>`;
+    el.onclick=()=>selectDest(d.id);
+    list.appendChild(el);
+  });
+}
+
+/* ═══════════════════════════════
+   SELECTION & DETAIL
+═══════════════════════════════ */
+function selectDest(id){
+  const d=DESTINATIONS.find(x=>x.id===id);
+  if(!d)return;
+  selectedDest=d;
+  renderDestList();
+  if(map)map.flyTo({center:[d.lon,d.lat],zoom:5,duration:800});
+
+  // Build detail panel
+  const score=weatherScores[d.id]||50;
+  const inItin=itinerary.some(x=>x.id===d.id);
+  const refLat=radiusCenter?radiusCenter.lat:(userLat||37.3382);
+  const refLon=radiusCenter?radiusCenter.lon:(userLon||-121.8863);
+  const distMi=Math.round(haversineMi(refLat,refLon,d.lat,d.lon));
+  const gemBadge=d.gem?'<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:8px;font-weight:600;margin-left:6px">💎 Hidden gem</span>':'';
+  document.getElementById('detailContent').innerHTML=`
+    <div class="detail-hero">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:2px">
+        <div class="detail-name" style="margin:0">${d.name}</div>${gemBadge}
+      </div>
+      <div class="detail-loc">${d.country} · ${d.climate} · <span style="color:#15803d;font-weight:600">${fmtDist(distMi)} away</span></div>
+      <div class="detail-desc">${d.desc}</div>
+      <div class="detail-stats">
+        <div class="dstat"><div class="dstat-lbl">Best season</div><div class="dstat-val">${d.best}</div></div>
+        <div class="dstat"><div class="dstat-lbl">Trip length</div><div class="dstat-val">${d.days} days</div></div>
+        <div class="dstat"><div class="dstat-lbl">Budget</div><div class="dstat-val">${d.budget}</div></div>
+        <div class="dstat"><div class="dstat-lbl">Weather score</div><div class="dstat-val" style="color:${score>=80?'#15803d':score>=60?'#1d4ed8':'#92400e'}">${score}/100</div></div>
+      </div>
+      <div class="detail-score">
+        <div class="score-bar"><div class="score-fill" style="width:${score}%"></div></div>
+        <span class="score-lbl">${score>=80?'Excellent match':score>=60?'Good match':'Fair match'}</span>
+      </div>
+      <div class="detail-actions">
+        <button class="btn-gold" onclick="addToItinerary(${d.id})" ${inItin?'disabled':''}>
+          ${inItin?'✓ In trip':'+ Add to trip'}
+        </button>
+        <button onclick="getDestAI(${d.id})">✦ AI ideas</button>
+      </div>
+    </div>`;
+  document.getElementById('detailAi').style.display='block';
+
+  // Switch to detail tab
+  document.querySelectorAll('.rtab')[0].click();
+  getDestAI(d.id);
+}
+
+async function getDestAI(id){
+  const d=DESTINATIONS.find(x=>x.id===id);
+  if(!d)return;
+  const box=document.getElementById('destAiBox');
+  box.innerHTML='<span class="spin"></span>Getting AI activity ideas…';
+  const wx=currentWeather;
+  const prompt=`Destination: ${d.name}, ${d.country}.
+Climate: ${d.climate}. Best time: ${d.best}. Tags: ${d.tags.join(', ')}.
+User's current weather: ${wx.temp||'?'}°F, ${wdesc(wx.code||0)}.
+List 5 specific must-do activities or experiences in ${d.name}. Format as short bullet points using • symbol. Max 12 words each. No markdown headers.`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,system:'You are a destination travel expert. Give a short, practical bullet list of top activities. Use • for bullets. Be specific and inspiring. Plain text only.',messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.startsWith('•')||l.startsWith('-'));
+    box.innerHTML=lines.length?lines.map(l=>`<div style="margin-bottom:4px"><b>•</b> ${l.replace(/^[•\-]\s*/,'')}</div>`).join(''):text.replace(/\n/g,'<br>');
+  }catch{
+    box.innerHTML=`<b>•</b> Explore the most iconic sites<br><b>•</b> Sample local cuisine and markets<br><b>•</b> Check seasonal events during ${d.best}`;
+  }
+}
+
+/* ═══════════════════════════════
+   ITINERARY
+═══════════════════════════════ */
+function addToItinerary(id){
+  const d=DESTINATIONS.find(x=>x.id===id);
+  if(!d||itinerary.some(x=>x.id===id))return;
+  itinerary.push(d);
+  renderItinerary();
+  if(selectedDest&&selectedDest.id===id)selectDest(id); // refresh button state
+}
+
+function removeFromItinerary(id){
+  itinerary=itinerary.filter(x=>x.id!==id);
+  renderItinerary();
+  if(selectedDest&&selectedDest.id===id)selectDest(id);
+}
+
+function clearItinerary(){
+  itinerary=[];
+  renderItinerary();
+  if(selectedDest)selectDest(selectedDest.id);
+}
+
+function renderItinerary(){
+  const list=document.getElementById('itinList');
+  const count=document.getElementById('itinCount');
+  const planBtn=document.getElementById('planBtn');
+  count.textContent=itinerary.length?`${itinerary.length} destination${itinerary.length>1?'s':''} planned`:'No destinations added yet';
+  planBtn.disabled=itinerary.length===0;
+  if(!itinerary.length){
+    list.innerHTML='<div class="itin-empty">Add destinations from the map or list.<br>Then generate a full AI itinerary!</div>';
+    return;
+  }
+  list.innerHTML='';
+  itinerary.forEach((d,i)=>{
+    const el=document.createElement('div');
+    el.className='itin-card';
+    el.innerHTML=`
+      <div class="itin-num">${i+1}</div>
+      <div class="itin-body">
+        <div class="itin-name">${d.name}</div>
+        <div class="itin-meta">${d.country} · ${d.days} days · ${d.budget}</div>
+        <div class="itin-meta">${d.tags.map(t=>`<span class="dtag ${TAG_CLS[t]||''}" style="font-size:8px">${t}</span>`).join(' ')}</div>
+      </div>
+      <span class="itin-remove" onclick="removeFromItinerary(${d.id})" title="Remove">×</span>`;
+    list.appendChild(el);
+  });
+}
+
+async function generateFullItinerary(){
+  if(!itinerary.length)return;
+  const btn=document.getElementById('planBtn');
+  btn.disabled=true;btn.textContent='⏳ Generating itinerary…';
+  const wx=currentWeather;
+  const destList=itinerary.map((d,i)=>`${i+1}. ${d.name}, ${d.country} (${d.days} days, ${d.tags.join('/')})`).join('\n');
+  const prompt=`Plan a detailed multi-destination vacation trip itinerary.
+Traveler's home base: ${wx.name||'their home city'}, current conditions: ${wx.temp||'?'}°F, ${wdesc(wx.code||0)}.
+Destinations (in order):
+${destList}
+Provide:
+- Suggested travel order and total trip duration
+- For each destination: 3 day-by-day activity highlights
+- Key logistics (internal flights, transportation)
+- Best combo tips
+Keep it practical, inspiring, and concise. Plain text only, no markdown.`;
+  const box=document.getElementById('aiBox');
+  box.innerHTML='<span class="spin"></span>Building your multi-destination itinerary…';
+  // Switch center panel's AI box into view by scrolling
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,system:'You are a world-class travel planner. Write detailed but concise itinerary advice. Plain text only.',messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    const names=itinerary.map(d=>d.name);
+    let html=text;
+    names.forEach(n=>{html=html.replace(new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),m=>`<b>${m}</b>`);});
+    box.innerHTML=html.replace(/\n/g,'<br>');
+  }catch{
+    box.innerHTML=`<b>Trip overview:</b> ${itinerary.map(d=>d.name).join(' → ')}. Check individual destination tabs for activity ideas.`;
+  }
+  btn.disabled=false;btn.textContent='✦ Generate full AI itinerary';
+}
+
+/* ═══════════════════════════════
+   WEATHER SCORING
+═══════════════════════════════ */
+function scoreDestinations(){
+  if(!currentWeather.temp)return;
+  const {temp,wind,hum,code}=currentWeather;
+  const isRainy=[51,53,55,61,63,65,80,81,82,95,96,99].includes(code);
+  const isCold=temp<50;
+  const isHot=temp>85;
+
+  // Compute distances from user home
+  const refLat=userLat||37.3382, refLon=userLon||-121.8863;
+  const allDists=DESTINATIONS.map(d=>haversineMi(refLat,refLon,d.lat,d.lon));
+  const maxDist=Math.max(...allDists)||1;
+
+  DESTINATIONS.forEach((d,i)=>{
+    let score=60;
+    const tags=d.tags;
+    if(isCold){if(tags.includes('beach')||tags.includes('luxury'))score+=25;if(tags.includes('nature')&&!tags.includes('adventure'))score+=10;}
+    if(isHot){if(tags.includes('adventure')&&d.climate==='Alpine')score+=20;if(tags.includes('nature')&&(d.country.includes('Canada')||d.country.includes('Iceland')))score+=20;}
+    if(isRainy){if(tags.includes('culture')||tags.includes('city'))score+=20;if(tags.includes('food'))score+=15;}
+    if(wind>20){if(tags.includes('beach'))score-=10;if(tags.includes('city'))score+=10;}
+    score=Math.max(20,Math.min(99,score+Math.floor(Math.random()*10)));
+    weatherScores[d.id]=score;
+
+    // Distance score: closer = higher (0–30 bonus), normalized
+    const dist=allDists[i];
+    distanceScores[d.id]={mi:Math.round(dist),bonus:Math.round((1-(dist/maxDist))*30)};
+  });
+}
+
+function renderWeatherMatch(){
+  const list=document.getElementById('wmList');
+  const sub=document.getElementById('wmSubtitle');
+  if(currentWeather.temp){
+    sub.textContent=`For ${currentWeather.temp||'?'}°F, ${wdesc(currentWeather.code||0)} in ${currentWeather.name||'your area'}`;
+  }
+  const sorted=[...DESTINATIONS].sort((a,b)=>(weatherScores[b.id]||50)-(weatherScores[a.id]||50));
+  list.innerHTML='';
+  sorted.slice(0,12).forEach((d,i)=>{
+    const score=weatherScores[d.id]||50;
+    const cls=score>=75?'best':score>=55?'':'';
+    const badgeCls=score>=75?'wmbadge-best':score>=55?'wmbadge-good':'wmbadge-fair';
+    const badgeLbl=score>=75?'Top pick':score>=55?'Good fit':'Fair';
+    const el=document.createElement('div');
+    el.className=`wm-card ${cls}`;
+    el.innerHTML=`
+      <div class="wm-top">
+        <div class="wm-name">${i+1}. ${d.name}</div>
+        <span class="wmbadge ${badgeCls}">${badgeLbl}</span>
+      </div>
+      <div class="wm-sub">${d.country} · ${d.tags.slice(0,2).join(', ')}</div>
+      <div class="wm-bar"><div class="wm-fill" style="width:${score}%;background:${score>=75?'#34d399':score>=55?'#60a5fa':'#fbbf24'}"></div></div>`;
+    el.onclick=()=>selectDest(d.id);
+    list.appendChild(el);
+  });
+}
+
+/* ═══════════════════════════════
+   AI VACATION ADVISOR (center panel)
+═══════════════════════════════ */
+async function runVacationAI(){
+  const btn=document.getElementById('aiBtn'),box=document.getElementById('aiBox');
+  btn.disabled=true;box.innerHTML='<span class="spin"></span>Analysing your conditions…';
+  const wx=currentWeather;
+  const top=DESTINATIONS.sort((a,b)=>(weatherScores[b.id]||50)-(weatherScores[a.id]||50)).slice(0,6).map(d=>`- ${d.name}, ${d.country} (${d.tags.join('/')})`).join('\n');
+  const prompt=`Traveler's location: ${wx.name}. Weather: ${wx.temp}°F, ${wdesc(wx.code)}, wind ${wx.wind}mph, humidity ${wx.hum}%.
+Top weather-matched destinations:
+${top}
+In 3 sentences: recommend the single best destination for escaping their current weather and why, one travel timing tip, and one unique activity there. Be specific and compelling.`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,system:'You are a world-class travel advisor. Give personalized, inspiring, specific vacation recommendations. Plain text only.',messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    const names=DESTINATIONS.map(d=>d.name);
+    let html=text;
+    names.forEach(n=>{html=html.replace(new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),m=>`<b>${m}</b>`);});
+    box.innerHTML=html;
+  }catch{
+    const top1=DESTINATIONS.sort((a,b)=>(weatherScores[b.id]||50)-(weatherScores[a.id]||50))[0];
+    box.innerHTML=`<b>${top1.name}</b> is your top weather-matched escape right now. Check the Weather Match tab for full rankings.`;
+  }
+  btn.disabled=false;
+}
+
+/* ═══════════════════════════════
+   UI HELPERS
+═══════════════════════════════ */
+function switchTab(name,el){
+  document.querySelectorAll('.rtab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+function setStatus(msg,state){
+  document.getElementById('statusText').textContent=msg;
+  document.getElementById('dot').className='dot'+(state?' '+state:'');
+}
+
+/* ═══════════════════════════════
+   RADIUS PLUGIN
+═══════════════════════════════ */
+let radiusMode=false, radiusCircle=null, radiusCenter=null;
+
+let radiusDebounceTimer=null;
+
+function updateRadiusLabel(){
+  const v=parseInt(document.getElementById('radiusSlider').value);
+  document.getElementById('radiusVal').textContent=v+' mi';
+  if(radiusCenter){
+    drawCircle(radiusCenter.lat,radiusCenter.lon,v);
+    renderDestList(); // re-sort list by new radius
+    clearTimeout(radiusDebounceTimer);
+    radiusDebounceTimer=setTimeout(()=>fetchLocalIdeas(radiusCenter.lat,radiusCenter.lon,v),900);
+  }
+}
+
+function toggleRadiusMode(){
+  radiusMode=!radiusMode;
+  const btn=document.getElementById('radiusBtn');
+  btn.textContent=radiusMode?'Click map to place…':'Draw radius';
+  btn.classList.toggle('active',radiusMode);
+  map.getCanvas().style.cursor=radiusMode?'crosshair':'';
+}
+
+function clearRadius(){
+  removeCircleFromMap();
+  radiusCircle=null;radiusCenter=null;
+  document.getElementById('radiusClearBtn').style.display='none';
+  document.getElementById('radiusPanel').classList.remove('open');
+  radiusMode=false;
+  const btn=document.getElementById('radiusBtn');
+  btn.textContent='Draw radius';btn.classList.remove('active');
+  map.getCanvas().style.cursor='';
+  renderDestList(); // revert to home-sorted order
+}
+
+function closeRadiusPanel(){
+  document.getElementById('radiusPanel').classList.remove('open');
+}
+
+function removeCircleFromMap(){
+  ['radius-fill','radius-stroke'].forEach(id=>{try{if(map.getLayer(id))map.removeLayer(id);}catch{}});
+  try{if(map.getSource('radius-circle'))map.removeSource('radius-circle');}catch{}
+}
+
+/* Geodesically accurate great-circle polygon using the Haversine destination formula.
+   For each bearing (0–360°) we compute the true lat/lon of a point exactly
+   `radiusMiles` miles away from the center — so the rendered ring matches
+   real-world distance regardless of latitude or zoom level. */
+function destinationPoint(lat,lon,bearingDeg,distKm){
+  const R=6371;
+  const d=distKm/R; // angular distance in radians
+  const b=bearingDeg*Math.PI/180;
+  const lat1=lat*Math.PI/180;
+  const lon1=lon*Math.PI/180;
+  const lat2=Math.asin(Math.sin(lat1)*Math.cos(d)+Math.cos(lat1)*Math.sin(d)*Math.cos(b));
+  const lon2=lon1+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(lat1),Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
+  return[lon2*180/Math.PI,lat2*180/Math.PI];
+}
+
+function buildCircleGeoJSON(lat,lon,radiusMiles){
+  const km=radiusMiles*1.60934;
+  const steps=128;
+  const pts=[];
+  for(let i=0;i<=steps;i++){
+    pts.push(destinationPoint(lat,lon,(i/steps)*360,km));
+  }
+  return{type:'Feature',geometry:{type:'Polygon',coordinates:[pts]}};
+}
+
+function drawCircle(lat,lon,radiusMiles){
+  const geojson=buildCircleGeoJSON(lat,lon,radiusMiles);
+  if(map.getSource('radius-circle')){
+    // Source already exists — just update the data, no flicker
+    map.getSource('radius-circle').setData(geojson);
+  }else{
+    map.addSource('radius-circle',{type:'geojson',data:geojson});
+    map.addLayer({id:'radius-fill',type:'fill',source:'radius-circle',paint:{'fill-color':'#d4a96a','fill-opacity':0.13}});
+    map.addLayer({id:'radius-stroke',type:'line',source:'radius-circle',paint:{'line-color':'#d4a96a','line-width':2,'line-dasharray':[5,3]}});
+  }
+}
+
+function onMapClickForRadius(e){
+  if(!radiusMode)return;
+  const {lng,lat}=e.lngLat;
+  const miles=parseInt(document.getElementById('radiusSlider').value);
+  radiusCenter={lat,lon:lng};
+  drawCircle(lat,lng,miles);
+  radiusMode=false;
+  const btn=document.getElementById('radiusBtn');
+  btn.textContent='Draw radius';btn.classList.remove('active');
+  map.getCanvas().style.cursor='';
+  document.getElementById('radiusClearBtn').style.display='';
+  renderDestList(); // re-sort destinations by proximity to circle center
+  fetchLocalIdeas(lat,lng,miles);
+}
+
+async function fetchLocalIdeas(lat,lon,miles){
+  const panel=document.getElementById('radiusPanel');
+  const body=document.getElementById('radiusPanelBody');
+  const sub=document.getElementById('radiusPanelSub');
+  panel.classList.add('open');
+  body.innerHTML='<span class="spin"></span> Asking Claude for local ideas…';
+  sub.textContent='';
+  // Reverse geocode the clicked point
+  let placeName='this area';
+  try{
+    const g=await geocode(lat,lon);
+    if(g.label&&g.label!=='Unknown')placeName=g.label;
+  }catch{}
+  sub.textContent='· '+miles+' mi around '+placeName;
+  const wx=currentWeather;
+  const wxStr=wx.temp?`Current weather: ${wx.temp}°F, ${wdesc(wx.code||0)}, wind ${wx.wind}mph.`:'';
+  const prompt=`The user is exploring a ${miles}-mile radius around ${placeName} (${lat.toFixed(3)},${lon.toFixed(3)}).
+${wxStr}
+Suggest local things to do, see, eat, and experience within ${miles} miles of ${placeName}.
+Return ONLY valid JSON (no markdown, no backticks) in this exact shape:
+{"place":"${placeName}","categories":[{"title":"🍽 Eat & Drink","ideas":["idea 1","idea 2","idea 3"]},{"title":"🏞 Outdoors & Nature","ideas":["idea 1","idea 2","idea 3"]},{"title":"🏛 Culture & Sights","ideas":["idea 1","idea 2","idea 3"]},{"title":"✨ Hidden Gems","ideas":["idea 1","idea 2"]}]}
+Use real, specific places or types of places known to exist near ${placeName}. Be concise (max 12 words per idea).`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,system:'You are a knowledgeable local travel guide. Return ONLY valid JSON, no markdown, no backticks, no preamble.',messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const raw=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'{}';
+    const clean=raw.replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(clean);
+    let html='';
+    (parsed.categories||[]).forEach(cat=>{
+      html+=`<div class="radius-cat"><div class="radius-cat-title">${cat.title}</div>`;
+      (cat.ideas||[]).forEach(idea=>{html+=`<div class="radius-idea">${idea}</div>`;});
+      html+='</div>';
+    });
+    body.innerHTML=html||'<span class="ghost">No ideas returned. Try again.</span>';
+  }catch(err){
+    body.innerHTML=`<b>Local picks near ${placeName}:</b><br>Try restaurants, parks, museums, and local markets within ${miles} miles. Adjust the radius and click again for AI suggestions.`;
+  }
+}
+
+</script>
+</body>
+</html>
