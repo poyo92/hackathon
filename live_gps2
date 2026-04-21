@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Live GPS Weather Tracker</title>
+<link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;color:#1a1a2e}
+.app{display:flex;flex-direction:column;max-width:1160px;margin:0 auto;height:100vh;min-height:600px;border-left:1px solid #dde1e7;border-right:1px solid #dde1e7;background:#fff;box-shadow:0 2px 16px rgba(0,0,0,.08)}
+.topbar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:#fff;border-bottom:1px solid #eaecf0;flex-shrink:0;z-index:20}
+.dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0}
+.dot.busy{background:#f59e0b;animation:blink 1s infinite}
+.dot.err{background:#ef4444}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+#statusText{font-size:13px;font-weight:500}
+#coordsText{margin-left:auto;font-size:11px;color:#6b7280;font-family:'Courier New',monospace}
+.body{display:grid;grid-template-columns:260px 1fr 300px;flex:1;min-height:0;overflow:hidden}
+
+/* LEFT */
+.side{border-right:1px solid #eaecf0;display:flex;flex-direction:column;overflow-y:auto}
+.sec{padding:12px 13px;border-bottom:1px solid #eaecf0;flex-shrink:0}
+.stitle{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin-bottom:8px}
+.hero{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.hero-icon{font-size:30px;line-height:1}
+.hero-temp{font-size:28px;font-weight:300;font-family:'Courier New',monospace}
+.hero-sub{font-size:11px;color:#6b7280;margin-top:1px}
+.loc-name{font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.tile{background:#f8fafc;border-radius:7px;padding:7px 9px;border:1px solid #eaecf0}
+.tl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af}
+.tv{font-size:12px;font-weight:500;font-family:'Courier New',monospace;margin-top:1px;color:#1a1a2e}
+.area-item{border:1px solid #eaecf0;border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer;transition:all .15s}
+.area-item:hover{border-color:#9ca3af;background:#fafbfc}
+.area-item.top{border-color:#22c55e}
+.area-item.hovered{border-color:#1d4ed8;background:#eff6ff}
+.arow{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.aname{font-size:12px;font-weight:600}
+.badge{font-size:9px;padding:2px 6px;border-radius:9px;font-weight:600}
+.bb{background:#dcfce7;color:#15803d}.bg{background:#dbeafe;color:#1d4ed8}.bf{background:#fef9c3;color:#854d0e}
+.asub{font-size:11px;color:#6b7280}
+.bar{height:3px;background:#e5e7eb;border-radius:2px;margin-top:5px;overflow:hidden}
+.bfill{height:100%;border-radius:2px;transition:width .5s}
+.tap-hint{font-size:10px;color:#9ca3af;margin-top:3px}
+
+/* hover activity panel */
+.hover-panel{background:#f0f6ff;border-top:2px solid #1d4ed8;padding:10px 13px;flex-shrink:0;display:none}
+.hover-panel.visible{display:block}
+.hover-city-name{font-size:12px;font-weight:700;color:#1d4ed8;margin-bottom:5px}
+.hover-activities{font-size:11px;color:#374151;line-height:1.65}
+.hover-activities b{font-weight:600;color:#1a1a2e}
+
+/* CENTER */
+.maincol{display:flex;flex-direction:column;min-height:0;border-right:1px solid #eaecf0}
+#map{flex:1;min-height:0}
+.attr-bar{display:flex;align-items:center;justify-content:space-between;padding:5px 10px;background:#fff;border-top:1px solid #eaecf0;flex-shrink:0;flex-wrap:wrap;gap:6px}
+.attr-text{font-size:10px;color:#6b7280}.attr-text a{color:#1d4ed8;text-decoration:none}
+.legend{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:4px;font-size:10px;color:#6b7280}
+.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.btmpanel{padding:11px 14px;border-top:1px solid #eaecf0;flex-shrink:0;background:#fff}
+.brow{display:flex;gap:7px;margin-bottom:7px}
+button{font-family:inherit;font-size:12px;font-weight:500;padding:7px 11px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#374151;cursor:pointer;transition:all .15s;white-space:nowrap}
+button:hover:not(:disabled){background:#f9fafb;border-color:#9ca3af}
+button:disabled{opacity:.38;cursor:not-allowed}
+.aibox{font-size:12px;color:#374151;line-height:1.7;padding:9px 11px;background:#f8fafc;border-radius:8px;border:1px solid #eaecf0;min-height:42px}
+.aibox b{color:#1a1a2e;font-weight:600}
+.ghost{color:#9ca3af;font-style:italic}
+
+/* RIGHT — tabs */
+.rpanel{display:flex;flex-direction:column;overflow:hidden}
+.rtabs{display:flex;border-bottom:1px solid #eaecf0;flex-shrink:0;background:#fafbfc}
+.rtab{flex:1;padding:9px 6px;font-size:11px;font-weight:600;color:#6b7280;cursor:pointer;text-align:center;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.rtab:hover{color:#374151;background:#f3f4f6}
+.rtab.active{color:#1a1a2e;border-bottom-color:#1a1a2e;background:#fff}
+.tab-pane{display:none;flex-direction:column;flex:1;overflow:hidden}
+.tab-pane.active{display:flex}
+
+/* SEARCH tab */
+.rheader{padding:11px 13px;border-bottom:1px solid #eaecf0;flex-shrink:0}
+.srow{display:flex;gap:6px;margin-bottom:7px}
+.sinput{flex:1;font-family:inherit;font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#1a1a2e;outline:none;min-width:0}
+.sinput:focus{border-color:#6b7280}
+.sbtn{font-family:inherit;font-size:12px;font-weight:600;padding:7px 11px;border-radius:8px;border:none;background:#1a1a2e;color:#fff;cursor:pointer;transition:opacity .15s;white-space:nowrap}
+.sbtn:hover{opacity:.82}.sbtn:disabled{opacity:.35;cursor:not-allowed}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:10px;padding:3px 8px;border-radius:10px;border:1px solid #e5e7eb;background:#f9fafb;color:#374151;cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
+.chip:hover,.chip.on{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+.radius-bar{padding:7px 13px;border-bottom:1px solid #eaecf0;background:#fff;flex-shrink:0}
+.radius-row{display:flex;align-items:center;gap:8px}
+.radius-label{font-size:11px;color:#6b7280;white-space:nowrap;flex-shrink:0}
+.radius-val{font-size:12px;font-weight:600;color:#1a1a2e;min-width:48px;text-align:right;flex-shrink:0;font-family:'Courier New',monospace}
+.radius-slider{flex:1;accent-color:#1a1a2e}
+.radius-presets{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}
+.rpill{font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid #e5e7eb;background:#f9fafb;color:#374151;cursor:pointer;transition:all .15s}
+.rpill:hover,.rpill.on{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+.filter-bar{padding:7px 13px;border-bottom:1px solid #eaecf0;background:#fafbfc;flex-shrink:0;display:none}
+.filter-row{display:flex;align-items:center;gap:6px}
+.filter-icon{font-size:11px;color:#6b7280;white-space:nowrap;flex-shrink:0}
+.filter-input{flex:1;font-family:inherit;font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid #d1d5db;background:#fff;color:#1a1a2e;outline:none;min-width:0}
+.filter-input:focus{border-color:#6b7280}
+.filter-clear{font-size:11px;color:#9ca3af;cursor:pointer;background:none;border:none;padding:3px 5px;border-radius:4px;flex-shrink:0;font-family:inherit}
+.filter-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.ftag{font-size:10px;padding:2px 8px;border-radius:10px;background:#1a1a2e;color:#fff;display:flex;align-items:center;gap:4px;cursor:pointer}
+.ftag-x{font-size:10px;opacity:.6}
+.filter-count{font-size:10px;color:#6b7280;margin-top:4px}
+.pcard.dimmed{opacity:.25;pointer-events:none}
+.pcard.matched .pname{color:#1d4ed8}
+mark{background:#fef08a;color:inherit;border-radius:2px;padding:0 1px}
+.rscroll{flex:1;overflow-y:auto;padding:10px 13px}
+.pcard{border:1px solid #eaecf0;border-radius:9px;padding:9px 11px;margin-bottom:7px;cursor:pointer;transition:all .15s}
+.pcard:hover{border-color:#9ca3af;background:#fafbfc}
+.pcard.hi{border-color:#1d4ed8;background:#eff6ff}
+.ptop{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:2px}
+.pname{font-size:12px;font-weight:600;color:#1a1a2e;line-height:1.3}
+.ptyp{font-size:9px;padding:2px 5px;border-radius:5px;background:#f1f5f9;color:#475569;font-weight:500;white-space:nowrap;flex-shrink:0}
+.pmeta{font-size:11px;color:#6b7280;margin-top:2px;line-height:1.4}
+.pdist{font-size:10px;color:#9ca3af;margin-top:2px}
+.pdot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.nores{font-size:12px;color:#9ca3af;font-style:italic;text-align:center;padding:20px 10px}
+.aifooter{padding:10px 13px;border-top:1px solid #eaecf0;background:#fafbfc;flex-shrink:0}
+.aiinner{font-size:12px;color:#374151;line-height:1.65;padding:9px 11px;background:#fff;border-radius:8px;border:1px solid #eaecf0;min-height:42px;max-height:110px;overflow-y:auto}
+.aiinner b{color:#1a1a2e;font-weight:600}
+
+/* REVIEWER tab */
+.rev-header{padding:11px 13px;border-bottom:1px solid #eaecf0;flex-shrink:0}
+.rev-scroll{flex:1;overflow-y:auto;padding:10px 13px}
+.rev-card{border:1px solid #eaecf0;border-radius:9px;padding:10px 12px;margin-bottom:8px;background:#fff}
+.rev-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:4px}
+.rev-place-name{font-size:13px;font-weight:600;color:#1a1a2e}
+.rev-stars{color:#f59e0b;font-size:13px;letter-spacing:1px}
+.rev-meta{font-size:10px;color:#9ca3af;margin-bottom:5px}
+.rev-text{font-size:12px;color:#374151;line-height:1.55}
+.rev-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.rev-tag{font-size:9px;padding:2px 7px;border-radius:8px;background:#f1f5f9;color:#475569}
+.rev-actions{display:flex;gap:6px;margin-top:6px}
+.rev-act-btn{font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid #e5e7eb;background:#f9fafb;color:#374151;cursor:pointer;font-family:inherit}
+.rev-act-btn:hover{background:#f3f4f6;border-color:#9ca3af}
+.rev-act-btn.del{color:#ef4444;border-color:#fecaca}
+.rev-act-btn.del:hover{background:#fef2f2}
+.add-btn-wrap{padding:10px 13px;border-top:1px solid #eaecf0;flex-shrink:0}
+.add-location-btn{width:100%;font-family:inherit;font-size:12px;font-weight:600;padding:9px;border-radius:8px;border:1.5px dashed #d1d5db;background:#fafbfc;color:#374151;cursor:pointer;transition:all .15s}
+.add-location-btn:hover{border-color:#9ca3af;background:#f3f4f6}
+.no-reviews{font-size:12px;color:#9ca3af;font-style:italic;text-align:center;padding:24px 10px}
+
+/* ADD/EDIT modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:14px;padding:20px;width:340px;max-width:92vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.modal-title{font-size:15px;font-weight:700;margin-bottom:14px;color:#1a1a2e}
+.form-group{margin-bottom:11px}
+.form-label{font-size:11px;font-weight:600;color:#374151;margin-bottom:4px;display:block}
+.form-input{width:100%;font-family:inherit;font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#1a1a2e;outline:none}
+.form-input:focus{border-color:#6b7280}
+textarea.form-input{resize:vertical;min-height:64px}
+.star-picker{display:flex;gap:4px;margin-top:2px}
+.star-btn{font-size:20px;cursor:pointer;opacity:.3;transition:opacity .1s;background:none;border:none;padding:0;line-height:1}
+.star-btn.lit{opacity:1}
+.tag-input-row{display:flex;gap:6px}
+.tag-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.tag-chip{font-size:10px;padding:2px 8px;border-radius:8px;background:#1a1a2e;color:#fff;cursor:pointer}
+.modal-actions{display:flex;gap:8px;margin-top:16px}
+.modal-save{flex:1;font-family:inherit;font-size:12px;font-weight:700;padding:9px;border-radius:8px;border:none;background:#1a1a2e;color:#fff;cursor:pointer}
+.modal-save:hover{opacity:.86}
+.modal-cancel{flex:1;font-family:inherit;font-size:12px;font-weight:500;padding:9px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#374151;cursor:pointer}
+.modal-cancel:hover{background:#f9fafb}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:11px;height:11px;border:1.5px solid #d1d5db;border-top-color:#6b7280;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:5px}
+.maplibregl-popup-content{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;padding:10px 12px;border-radius:8px;min-width:160px;max-width:230px;line-height:1.5}
+.maplibregl-popup-content b{font-size:13px;display:block;margin-bottom:3px}
+.ptyplabel{display:inline-block;font-size:9px;padding:1px 6px;border-radius:4px;background:#f1f5f9;color:#475569;margin-bottom:4px}
+.pmeta-popup{font-size:11px;color:#6b7280}
+@media(max-width:800px){.body{grid-template-columns:1fr}.side,.maincol{border-right:none;border-bottom:1px solid #eaecf0}.rpanel{max-height:420px}}
+</style>
+</head>
+<body>
+
+<!-- Add/Edit modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">Add location review</div>
+    <div class="form-group">
+      <label class="form-label">Place name *</label>
+      <input class="form-input" id="fName" placeholder="e.g. Blue Bottle Coffee"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Type / category</label>
+      <input class="form-input" id="fType" placeholder="cafe, park, restaurant…"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Address</label>
+      <input class="form-input" id="fAddr" placeholder="123 Main St, City"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Rating</label>
+      <div class="star-picker" id="starPicker">
+        <button class="star-btn" data-v="1" onclick="setStar(1)">★</button>
+        <button class="star-btn" data-v="2" onclick="setStar(2)">★</button>
+        <button class="star-btn" data-v="3" onclick="setStar(3)">★</button>
+        <button class="star-btn" data-v="4" onclick="setStar(4)">★</button>
+        <button class="star-btn" data-v="5" onclick="setStar(5)">★</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Your review</label>
+      <textarea class="form-input" id="fReview" placeholder="What did you think? What's it good for?"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tags (press Enter to add)</label>
+      <div class="tag-input-row">
+        <input class="form-input" id="fTagInput" placeholder="outdoor, vegan, family-friendly…" onkeydown="if(event.key==='Enter'){event.preventDefault();addTag()}"/>
+      </div>
+      <div class="tag-chips" id="fTags"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Website (optional)</label>
+      <input class="form-input" id="fWeb" placeholder="https://…"/>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button class="modal-save" onclick="saveReview()">Save review</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <div class="topbar">
+    <div class="dot busy" id="dot"></div>
+    <span id="statusText">Getting your location…</span>
+    <span id="coordsText">—</span>
+  </div>
+  <div class="body">
+
+    <!-- LEFT: weather + nearby + hover panel -->
+    <div class="side">
+      <div class="sec">
+        <div class="stitle">Current conditions</div>
+        <div id="weatherPanel"><span class="ghost" style="font-size:12px">Waiting for GPS…</span></div>
+      </div>
+      <div class="sec" style="flex:1;overflow-y:auto">
+        <div class="stitle">Nearby cities · tap to search</div>
+        <div id="nearbyPanel"><span class="ghost" style="font-size:12px">Loading…</span></div>
+      </div>
+      <!-- hover preview panel -->
+      <div class="hover-panel" id="hoverPanel">
+        <div class="hover-city-name" id="hoverCityName"></div>
+        <div class="hover-activities" id="hoverActivities"><span class="spin"></span></div>
+      </div>
+    </div>
+
+    <!-- CENTER: map -->
+    <div class="maincol">
+      <div id="map"></div>
+      <div class="attr-bar">
+        <div class="legend">
+          <div class="li"><div class="ld" style="background:#1d4ed8;outline:2px solid #1d4ed8;outline-offset:1px"></div>You</div>
+          <div class="li"><div style="background:#fff;border:2px solid #16a34a;border-radius:4px;padding:1px 4px;font-size:9px;font-weight:700;color:#16a34a">72° City</div></div>
+          <div class="li"><div class="ld" style="background:#e11d48"></div>Food</div>
+          <div class="li"><div class="ld" style="background:#16a34a"></div>Nature</div>
+          <div class="li"><div class="ld" style="background:#7c3aed"></div>Culture</div>
+          <div class="li"><div class="ld" style="background:#0891b2"></div>Other</div>
+        </div>
+        <div class="attr-text">
+          © <a href="https://openfreemap.org" target="_blank">OpenFreeMap</a>
+          © <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a>
+          © <a href="https://openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>
+        </div>
+      </div>
+      <div class="btmpanel">
+        <div class="stitle" style="margin-bottom:6px">AI route advisor</div>
+        <div class="brow">
+          <button id="aiBtn" onclick="runAI()" disabled>✦ Analyze &amp; recommend</button>
+          <button id="refreshBtn" onclick="startTracking()" disabled>↺ Refresh</button>
+        </div>
+        <div class="aibox" id="aiBox"><span class="ghost">Allow location access to get personalized travel advice.</span></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: tabs — Search | Reviews -->
+    <div class="rpanel">
+      <div class="rtabs">
+        <div class="rtab active" onclick="switchTab('search',this)">🔍 Search</div>
+        <div class="rtab" onclick="switchTab('reviews',this)">⭐ My Reviews</div>
+      </div>
+
+      <!-- SEARCH TAB -->
+      <div class="tab-pane active" id="tab-search">
+        <div class="rheader">
+          <div class="srow">
+            <input class="sinput" id="searchInput" type="text" placeholder="cafes, parks, museums…" onkeydown="if(event.key==='Enter')doSearch()"/>
+            <button class="sbtn" id="searchBtn" onclick="doSearch()" disabled>Search</button>
+          </div>
+          <div class="chips">
+            <span class="chip" onclick="chipClick(this,'restaurants')">🍽 Eat</span>
+            <span class="chip" onclick="chipClick(this,'parks')">🌳 Parks</span>
+            <span class="chip" onclick="chipClick(this,'cafes')">☕ Cafes</span>
+            <span class="chip" onclick="chipClick(this,'museums')">🏛 Culture</span>
+            <span class="chip" onclick="chipClick(this,'hiking')">🥾 Hiking</span>
+            <span class="chip" onclick="chipClick(this,'bars')">🍺 Bars</span>
+            <span class="chip" onclick="chipClick(this,'shopping')">🛍 Shopping</span>
+            <span class="chip" onclick="chipClick(this,'beaches')">🏖 Beaches</span>
+          </div>
+        </div>
+        <div class="radius-bar">
+          <div class="radius-row">
+            <span class="radius-label">📍 Radius:</span>
+            <input class="radius-slider" id="radiusSlider" type="range" min="0.25" max="25" step="0.25" value="2" oninput="onRadiusSlide(this.value)"/>
+            <span class="radius-val" id="radiusVal">2 mi</span>
+          </div>
+          <div class="radius-presets">
+            <span class="rpill" onclick="setRadius(0.5,this)">0.5 mi</span>
+            <span class="rpill on" onclick="setRadius(2,this)">2 mi</span>
+            <span class="rpill" onclick="setRadius(5,this)">5 mi</span>
+            <span class="rpill" onclick="setRadius(10,this)">10 mi</span>
+            <span class="rpill" onclick="setRadius(25,this)">25 mi</span>
+          </div>
+        </div>
+        <div class="filter-bar" id="filterBar">
+          <div class="filter-row">
+            <span class="filter-icon">🔍 Filter:</span>
+            <input class="filter-input" id="filterInput" type="text" placeholder="outdoor, wifi, vegan…" oninput="onFilterInput()"/>
+            <button class="filter-clear" onclick="clearFilter()">✕</button>
+          </div>
+          <div class="filter-tags" id="filterTags"></div>
+          <div class="filter-count" id="filterCount"></div>
+        </div>
+        <div class="rscroll" id="searchResults">
+          <div class="nores">Search or tap a category to find places — they'll be pinned on the map.</div>
+        </div>
+        <div class="aifooter">
+          <div class="stitle" style="margin-bottom:5px">AI activity tips</div>
+          <div class="aiinner" id="searchAiBox"><span class="ghost">Search for places to get weather-matched tips.</span></div>
+        </div>
+      </div>
+
+      <!-- REVIEWS TAB -->
+      <div class="tab-pane" id="tab-reviews">
+        <div class="rev-header">
+          <div class="stitle" style="margin-bottom:0">Location reviews</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:4px">Your personal open-source location database, stored locally.</div>
+        </div>
+        <div class="rscroll rev-scroll" id="reviewsList">
+          <div class="no-reviews">No reviews yet. Add your first location below!</div>
+        </div>
+        <div class="add-btn-wrap">
+          <button class="add-location-btn" onclick="openModal()">+ Add location review</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<script>
+/* ── constants ── */
+const WMO={0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Icy fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Showers',81:'Heavy showers',82:'Violent showers',95:'Thunderstorm',96:'Thunderstorm+hail',99:'Thunderstorm+hail'};
+const WICO={0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌦️',55:'🌧️',61:'🌦️',63:'🌧️',65:'🌧️',71:'🌨️',73:'❄️',75:'❄️',80:'🌧️',81:'🌧️',82:'⛈️',95:'⛈️',96:'⛈️',99:'⛈️'};
+const wico=c=>WICO[c]||'🌡️',wdesc=c=>WMO[c]||'Unknown';
+const OTAGS={restaurants:[['amenity','restaurant'],['amenity','fast_food']],parks:[['leisure','park'],['leisure','garden'],['leisure','nature_reserve']],cafes:[['amenity','cafe']],museums:[['tourism','museum'],['tourism','gallery'],['amenity','arts_centre']],hiking:[['leisure','nature_reserve'],['route','hiking']],bars:[['amenity','bar'],['amenity','pub'],['amenity','nightclub']],shopping:[['shop','mall'],['shop','department_store'],['amenity','marketplace']],beaches:[['natural','beach'],['leisure','beach_resort']]};
+
+/* ── state ── */
+let userLat,userLon,currentWeather={},nearbyList=[];
+let map,placeMarkers=[],cityMarkers=[],searchLat,searchLon;
+let activeFilterWords=[],lastPlaces=[],searchRadiusMi=2;
+let editingId=null,formTags=[],formStars=3;
+let hoverDebounce=null,lastHoveredCity='';
+
+/* ── tab switching ── */
+function switchTab(name,el){
+  document.querySelectorAll('.rtab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='reviews') renderReviews();
+}
+
+/* ── radius ── */
+function onRadiusSlide(val){
+  searchRadiusMi=parseFloat(val);
+  document.getElementById('radiusVal').textContent=searchRadiusMi+' mi';
+  document.querySelectorAll('.rpill').forEach(p=>p.classList.remove('on'));
+}
+function setRadius(mi,el){
+  searchRadiusMi=mi;
+  document.getElementById('radiusSlider').value=mi;
+  document.getElementById('radiusVal').textContent=mi+' mi';
+  document.querySelectorAll('.rpill').forEach(p=>p.classList.remove('on'));
+  if(el)el.classList.add('on');
+}
+
+/* ── keyword filter ── */
+function onFilterInput(){
+  const words=[...new Set(document.getElementById('filterInput').value.split(/[\s,]+/).map(w=>w.trim().toLowerCase()).filter(w=>w.length>1))];
+  activeFilterWords=words;renderFilterTags();applyFilter();
+}
+function renderFilterTags(){
+  const c=document.getElementById('filterTags');c.innerHTML='';
+  activeFilterWords.forEach(w=>{const t=document.createElement('span');t.className='ftag';t.innerHTML=`${w}<span class="ftag-x">✕</span>`;t.onclick=()=>{activeFilterWords=activeFilterWords.filter(x=>x!==w);document.getElementById('filterInput').value=activeFilterWords.join(', ');renderFilterTags();applyFilter();};c.appendChild(t);});
+}
+function clearFilter(){activeFilterWords=[];document.getElementById('filterInput').value='';document.getElementById('filterTags').innerHTML='';document.getElementById('filterCount').textContent='';applyFilter();}
+function highlight(text,words){if(!words.length)return text;const re=new RegExp(`(${words.map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')})`,'gi');return text.replace(re,'<mark>$1</mark>');}
+function applyFilter(){
+  if(!lastPlaces.length)return;
+  const words=activeFilterWords;const cards=document.querySelectorAll('.pcard');let mc=0;
+  lastPlaces.forEach((p,i)=>{
+    const card=cards[i];if(!card)return;
+    const t=p.tags||{};
+    const s=[t.name,t.amenity,t['addr:street'],t.opening_hours,t.cuisine,t.description].filter(Boolean).join(' ').toLowerCase();
+    if(!words.length){card.classList.remove('dimmed','matched');const n=card.querySelector('.pname');if(n&&p._origName)n.innerHTML=p._origName;return;}
+    const matched=words.every(w=>s.includes(w));
+    card.classList.toggle('dimmed',!matched);card.classList.toggle('matched',matched);if(matched)mc++;
+    const n=card.querySelector('.pname');if(n){if(!p._origName)p._origName=n.innerHTML;n.innerHTML=matched?highlight(p._origName,words):p._origName;}
+    const mk=placeMarkers[i];if(mk){const e=mk.getElement();if(e)e.style.opacity=matched?'1':'0.2';}
+  });
+  document.getElementById('filterCount').textContent=words.length?`${mc} of ${lastPlaces.length} match`:'';
+  if(!words.length)placeMarkers.forEach(m=>{const e=m.getElement();if(e)e.style.opacity='1';});
+}
+
+/* ── helpers ── */
+function calcScore(tc,wind,vis,hum){const tf=tc*9/5+32;let s=100;if(tf<40||tf>95)s-=30;else if(tf<50||tf>86)s-=15;if(wind>25)s-=22;else if(wind>15)s-=10;if(vis<3)s-=20;else if(vis<5)s-=8;if(hum>85)s-=12;else if(hum>72)s-=5;return Math.max(5,Math.min(100,Math.round(s)));}
+const scol=s=>s>=80?'#22c55e':s>=60?'#3b82f6':'#f59e0b';
+const bcls=s=>s>=80?'bb':s>=60?'bg':'bf';
+const blbl=s=>s>=80?'Best':s>=60?'Good':'Fair';
+function distKm(a,b,c,d){const R=6371,dLat=(c-a)*Math.PI/180,dLon=(d-b)*Math.PI/180;const x=Math.sin(dLat/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
+function friendlyType(tags){if(tags.amenity)return tags.amenity.replace(/_/g,' ');if(tags.leisure)return tags.leisure.replace(/_/g,' ');if(tags.tourism)return tags.tourism.replace(/_/g,' ');if(tags.shop)return tags.shop.replace(/_/g,' ')+' shop';if(tags.natural)return tags.natural;return'place';}
+function pinColor(tags){const a=tags.amenity||'',l=tags.leisure||'',t=tags.tourism||'',s=tags.shop||'',n=tags.natural||'';if(['restaurant','fast_food','food_court'].includes(a))return'#e11d48';if(['cafe','coffee_shop'].includes(a))return'#d97706';if(['bar','pub','nightclub'].includes(a))return'#7c3aed';if(['park','garden','nature_reserve'].includes(l)||n==='beach')return'#16a34a';if(['museum','gallery','arts_centre'].includes(t)||a==='arts_centre')return'#7c3aed';if(s||a==='marketplace')return'#0891b2';return'#0891b2';}
+function setStatus(msg,state){document.getElementById('statusText').textContent=msg;document.getElementById('dot').className='dot'+(state?' '+state:'');}
+function starsHtml(n){return'★'.repeat(n)+'☆'.repeat(5-n);}
+
+/* ── map init ── */
+function initMap(lat,lon){
+  if(map){map.remove();map=null;}
+  clearCityMarkers();
+  map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:[lon,lat],zoom:13,attributionControl:true});
+  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
+  map.addControl(new maplibregl.GeolocateControl({positionOptions:{enableHighAccuracy:true},trackUserLocation:false}),'top-right');
+  const el=document.createElement('div');
+  el.style.cssText='width:18px;height:18px;border-radius:50%;background:#1d4ed8;border:3px solid #fff;box-shadow:0 0 0 2px #1d4ed8,0 2px 6px rgba(0,0,0,.3);cursor:pointer';
+  new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([lon,lat]).setPopup(new maplibregl.Popup({offset:12}).setHTML('<b>📍 You are here</b>')).addTo(map);
+}
+
+/* ── city markers with hover-to-activity ── */
+function clearCityMarkers(){cityMarkers.forEach(m=>{try{m.remove();}catch{}});cityMarkers=[];}
+
+function addCityMarkers(areas){
+  clearCityMarkers();
+  if(!map)return;
+  areas.forEach((a,idx)=>{
+    const col=a.sc>=80?'#16a34a':a.sc>=60?'#2563eb':'#d97706';
+    const icon=[0,1].includes(a.code)?'☀':[2,3].includes(a.code)?'⛅':[45,48].includes(a.code)?'🌫':[51,53,55,61,63,65,80,81,82].includes(a.code)?'🌧':[71,73,75].includes(a.code)?'❄':[95,96,99].includes(a.code)?'⛈':'🌡';
+    const el=document.createElement('div');
+    el.style.cssText='display:flex;flex-direction:column;align-items:center;cursor:pointer;filter:drop-shadow(0 2px 4px rgba(0,0,0,.22));';
+    el.innerHTML=`<div style="background:#fff;border:2px solid ${col};border-radius:8px;padding:3px 7px;display:flex;align-items:center;gap:4px;font-family:-apple-system,sans-serif;white-space:nowrap"><span style="font-size:11px">${icon}</span><span style="font-size:11px;font-weight:700;color:${col}">${a.temp}°F</span><span style="font-size:10px;font-weight:600;color:#1a1a2e;max-width:80px;overflow:hidden;text-overflow:ellipsis">${a.name.split(',')[0]}</span></div><div style="width:2px;height:6px;background:${col};margin:0 auto"></div><div style="width:8px;height:8px;border-radius:50%;background:${col};border:2px solid #fff"></div>`;
+    const marker=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([a.lon,a.lat]).addTo(map);
+
+    // hover → show activities in left panel
+    el.addEventListener('mouseenter',()=>onCityHover(a,idx));
+    el.addEventListener('mouseleave',()=>onCityLeave(idx));
+    // click → search places in that city
+    el.addEventListener('click',()=>{
+      searchLat=a.lat;searchLon=a.lon;
+      map.flyTo({center:[a.lon,a.lat],zoom:13,duration:700});
+      const q=document.getElementById('searchInput').value.trim()||'things to do';
+      document.querySelectorAll('.rtab')[0].click();
+      performSearch(q,a.lat,a.lon,a.name);
+    });
+    cityMarkers.push(marker);
+  });
+}
+
+function onCityHover(area,idx){
+  clearTimeout(hoverDebounce);
+  if(lastHoveredCity===area.key) return;
+  lastHoveredCity=area.key;
+  // highlight sidebar card
+  document.querySelectorAll('.area-item').forEach((el,i)=>{el.classList.toggle('hovered',i===idx);});
+  // show hover panel
+  const panel=document.getElementById('hoverPanel');
+  const nameEl=document.getElementById('hoverCityName');
+  const actEl=document.getElementById('hoverActivities');
+  nameEl.textContent=`${area.name} — ${area.temp}°F ${wdesc(area.code)}`;
+  actEl.innerHTML='<span class="spin"></span> Loading activity ideas…';
+  panel.classList.add('visible');
+  hoverDebounce=setTimeout(()=>fetchCityActivities(area,actEl),400);
+}
+
+function onCityLeave(idx){
+  clearTimeout(hoverDebounce);
+  document.querySelectorAll('.area-item').forEach(el=>el.classList.remove('hovered'));
+}
+
+async function fetchCityActivities(area,actEl){
+  const wx=currentWeather;
+  const prompt=`City: ${area.name}. Weather: ${area.temp}°F, ${wdesc(area.code)}, wind ${area.wind}mph, humidity ${area.hum}%.
+Current user location weather: ${wx.temp||'?'}°F, ${wdesc(wx.code)}.
+List 4-5 specific activities or places to visit in ${area.name.split(',')[0]} that suit today's weather. Format as a short bulleted list using • symbol. Each item max 10 words. No markdown.`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,system:'You are a local activity guide. Short, practical bullet list only. Use • for bullets. No markdown headers.',messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    // format bullets
+    const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.startsWith('•')||l.startsWith('-'));
+    if(lines.length){
+      actEl.innerHTML=lines.map(l=>`<div style="margin-bottom:3px">${l.replace(/^[-•]\s*/,'<b>•</b> ')}</div>`).join('');
+    }else{
+      actEl.innerHTML=text.replace(/\n/g,'<br>');
+    }
+  }catch{
+    actEl.innerHTML='<b>•</b> Check local parks and cafes<br><b>•</b> Visit the downtown area<br><b>•</b> Explore local museums';
+  }
+}
+
+/* ── weather ── */
+async function fetchWx(lat,lon){const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,visibility,uv_index&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`);if(!r.ok)throw new Error('wx');return r.json();}
+
+async function geocode(lat,lon){
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}&format=json&zoom=10&addressdetails=1`,{headers:{'Accept-Language':'en'}});
+    const d=await r.json();const a=d.address||{};
+    const city=a.city||a.town||a.village||a.municipality||a.suburb||a.neighbourhood||a.hamlet||'';
+    if(!city)return{label:'Unknown',key:'unknown'};
+    const state=a.state_code||'';
+    return{label:state?`${city}, ${state}`:city,key:city.toLowerCase().trim()};
+  }catch{return{label:'Unknown',key:'unknown'};}
+}
+
+function renderWeather(wx,name){
+  const c=wx.current;
+  const temp=Math.round(c.temperature_2m),feel=Math.round(c.apparent_temperature);
+  const hum=Math.round(c.relative_humidity_2m),wind=Math.round(c.wind_speed_10m);
+  const vis=c.visibility!=null?Math.round(c.visibility/160.934)/10:null;
+  const uv=c.uv_index!=null?Math.round(c.uv_index):null;
+  const code=c.weather_code;
+  currentWeather={temp,feel,hum,wind,vis,uv,code,name};
+  document.getElementById('weatherPanel').innerHTML=`<div class="loc-name">${name}</div><div class="hero"><div class="hero-icon">${wico(code)}</div><div><div class="hero-temp">${temp}°F</div><div class="hero-sub">Feels ${feel}°F · ${wdesc(code)}</div></div></div><div class="g2"><div class="tile"><div class="tl">Humidity</div><div class="tv">${hum}%</div></div><div class="tile"><div class="tl">Wind</div><div class="tv">${wind} mph</div></div>${vis!=null?`<div class="tile"><div class="tl">Visibility</div><div class="tv">${vis} mi</div></div>`:''}${uv!=null?`<div class="tile"><div class="tl">UV index</div><div class="tv">${uv}</div></div>`:''}</div>`;
+}
+
+const DIRS=[{dlat:.28,dlon:0},{dlat:.2,dlon:.2},{dlat:0,dlon:.28},{dlat:-.2,dlon:.2},{dlat:-.28,dlon:0},{dlat:-.2,dlon:-.2},{dlat:0,dlon:-.28},{dlat:.2,dlon:-.2}];
+
+async function loadNearby(){
+  document.getElementById('nearbyPanel').innerHTML='<span class="ghost" style="font-size:12px">Fetching nearby cities…</span>';
+  const raw=await Promise.all(DIRS.map(async o=>{
+    const lat=userLat+o.dlat,lon=userLon+o.dlon;
+    const [wx,geo]=await Promise.all([fetchWx(lat,lon),geocode(lat,lon)]);
+    const c=wx.current;
+    const tc=(c.temperature_2m-32)*5/9,wind=Math.round(c.wind_speed_10m);
+    const vis=c.visibility!=null?c.visibility/1609.34:10,hum=Math.round(c.relative_humidity_2m);
+    const temp=Math.round(c.temperature_2m),dist=Math.round(Math.sqrt(o.dlat**2+o.dlon**2)*69);
+    return{name:geo.label,key:geo.key,lat,lon,temp,wind,hum,code:c.weather_code,dist,sc:calcScore(tc,wind,vis,hum)};
+  }));
+  const seen=new Map();
+  raw.forEach(a=>{if(a.key==='unknown')return;const ex=seen.get(a.key);if(!ex||a.sc>ex.sc)seen.set(a.key,a);});
+  const userKey=(currentWeather.name||'').toLowerCase().split(',')[0].trim();
+  seen.delete(userKey);
+  nearbyList=[...seen.values()].sort((a,b)=>b.sc-a.sc).slice(0,6);
+
+  const panel=document.getElementById('nearbyPanel');panel.innerHTML='';
+  nearbyList.forEach((a,i)=>{
+    const d=document.createElement('div');
+    d.className='area-item'+(i===0?' top':'');
+    d.dataset.cityIdx=i;
+    d.onmouseenter=()=>onCityHover(a,i);
+    d.onmouseleave=()=>onCityLeave(i);
+    d.onclick=()=>{
+      searchLat=a.lat;searchLon=a.lon;
+      map.flyTo({center:[a.lon,a.lat],zoom:13,duration:800});
+      const q=document.getElementById('searchInput').value.trim()||'things to do';
+      document.querySelectorAll('.rtab')[0].click();
+      performSearch(q,a.lat,a.lon,a.name);
+    };
+    d.innerHTML=`<div class="arow"><span class="aname">${a.name}</span><span class="badge ${bcls(a.sc)}">${blbl(a.sc)}</span></div><div class="asub">${wico(a.code)} ${a.temp}°F · ${wdesc(a.code)} · ~${a.dist} mi</div><div class="bar"><div class="bfill" style="width:${a.sc}%;background:${scol(a.sc)}"></div></div><div class="tap-hint">Hover for activities · click to search →</div>`;
+    panel.appendChild(d);
+  });
+
+  if(map){
+    const go=()=>{
+      addCityMarkers(nearbyList);
+      const pts=[[userLon,userLat],...nearbyList.map(a=>[a.lon,a.lat])];
+      const lons=pts.map(p=>p[0]),lats=pts.map(p=>p[1]);
+      map.fitBounds([[Math.min(...lons),Math.min(...lats)],[Math.max(...lons),Math.max(...lats)]],{padding:60,maxZoom:11,duration:800});
+    };
+    map.isStyleLoaded()?go():map.once('styledata',go);
+  }
+}
+
+async function startTracking(){
+  setStatus('Fetching live weather…','busy');
+  ['aiBtn','refreshBtn','searchBtn'].forEach(id=>document.getElementById(id).disabled=true);
+  try{
+    const [wx,geo]=await Promise.all([fetchWx(userLat,userLon),geocode(userLat,userLon)]);
+    const locName=geo.label!=='Unknown'?geo.label:'Your location';
+    renderWeather(wx,locName);
+    initMap(userLat,userLon);
+    searchLat=userLat;searchLon=userLon;
+    document.getElementById('coordsText').textContent=Math.abs(userLat).toFixed(4)+'°'+(userLat>=0?'N':'S')+' '+Math.abs(userLon).toFixed(4)+'°'+(userLon>=0?'E':'W');
+    setStatus('Live — '+locName,'');
+    ['aiBtn','refreshBtn','searchBtn'].forEach(id=>document.getElementById(id).disabled=false);
+    await loadNearby();
+  }catch(e){
+    setStatus('Weather fetch failed','err');
+    document.getElementById('weatherPanel').innerHTML='<span style="font-size:12px;color:#ef4444">Could not load weather. Check connection then Refresh.</span>';
+  }
+}
+
+/* ── place search ── */
+function buildQuery(lat,lon,tags,r=3200){const cap=r>8000?40:25;return`[out:json][timeout:15];(${tags.map(([k,v])=>`node["${k}"="${v}"](around:${r},${lat},${lon});way["${k}"="${v}"](around:${r},${lat},${lon});`).join('')});out center ${cap};`;}
+
+async function fetchPlaces(query,lat,lon){
+  const radiusMi=searchRadiusMi;
+  const cityName=currentWeather.name||`${lat.toFixed(3)},${lon.toFixed(3)}`;
+  const userPrompt=`Find up to 12 real places matching "${query}" within ${radiusMi} miles of ${cityName} (coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)}).\nSearch the web to find real, currently operating places with exact coordinates.\nReply ONLY with a JSON array (no markdown):\n[{"name":"Place","type":"cafe","lat":37.123,"lon":-121.456,"address":"123 Main St","hours":"9am-5pm","phone":"","website":"https://..."},...]\nCoordinates must be real and accurate.`;
+  const messages=[{role:'user',content:userPrompt}];
+  try{
+    for(let i=0;i<5;i++){
+      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,tools:[{type:'web_search_20250305',name:'web_search'}],system:'You are a local place-finder. Use web_search to find real businesses. Respond ONLY with a valid JSON array of places with accurate lat/lon. No markdown, no prose.',messages})});
+      const data=await res.json();
+      if(!data.content||data.error)break;
+      const textBlocks=data.content.filter(b=>b.type==='text');
+      const toolBlocks=data.content.filter(b=>b.type==='tool_use');
+      if(data.stop_reason==='end_turn'){const places=extractPlacesJSON(textBlocks.map(b=>b.text).join(''));if(places.length)return normalisePlaces(places);break;}
+      if(data.stop_reason==='tool_use'&&toolBlocks.length){messages.push({role:'assistant',content:data.content});messages.push({role:'user',content:toolBlocks.map(tb=>({type:'tool_result',tool_use_id:tb.id,content:''}))});continue;}
+      const places=extractPlacesJSON(textBlocks.map(b=>b.text).join(''));if(places.length)return normalisePlaces(places);break;
+    }
+  }catch(e){console.error(e);}
+  return[];
+}
+
+function extractPlacesJSON(text){
+  if(!text)return[];
+  try{const a=JSON.parse(text.replace(/```json|```/g,'').trim());if(Array.isArray(a))return a;}catch{}
+  const m=text.match(/\[[\s\S]*\]/);if(m){try{const a=JSON.parse(m[0]);if(Array.isArray(a))return a;}catch{}}
+  return[];
+}
+function normalisePlaces(arr){
+  return arr.map(p=>({tags:{name:String(p.name||'').trim(),amenity:String(p.type||p.category||'place').toLowerCase(),'addr:street':String(p.address||p.addr||'').trim(),opening_hours:String(p.hours||p.opening_hours||'').trim(),phone:String(p.phone||'').trim(),website:String(p.website||p.url||'').trim()},_lat:parseFloat(p.lat||p.latitude||0),_lon:parseFloat(p.lon||p.lng||p.longitude||0)})).filter(p=>p.tags.name&&p._lat!==0&&p._lon!==0&&!isNaN(p._lat)&&!isNaN(p._lon));
+}
+function clearPlaceMarkers(){
+  placeMarkers.forEach(m=>{try{m.remove();}catch{}});placeMarkers=[];
+  if(map){['radius-fill','radius-line'].forEach(l=>{if(map.getLayer(l))map.removeLayer(l);});if(map.getSource('radius-circle'))map.removeSource('radius-circle');}
+}
+function drawRadiusCircle(lat,lon,mi){
+  if(!map)return;const rk=mi*1.60934,steps=64,coords=[];
+  for(let i=0;i<=steps;i++){const a=(i/steps)*2*Math.PI;coords.push([lon+(rk/(111.32*Math.cos(lat*Math.PI/180)))*Math.cos(a),lat+(rk/111.32)*Math.sin(a)]);}
+  const go=()=>{if(map.getSource('radius-circle'))return;map.addSource('radius-circle',{type:'geojson',data:{type:'Feature',geometry:{type:'Polygon',coordinates:[coords]}}});map.addLayer({id:'radius-fill',type:'fill',source:'radius-circle',paint:{'fill-color':'#1d4ed8','fill-opacity':0.05}});map.addLayer({id:'radius-line',type:'line',source:'radius-circle',paint:{'line-color':'#1d4ed8','line-width':1.5,'line-dasharray':[3,3],'line-opacity':0.5}});};
+  map.isStyleLoaded()?go():map.once('load',go);
+}
+function chipClick(el,cat){document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');document.getElementById('searchInput').value=cat;doSearch();}
+async function doSearch(){const q=document.getElementById('searchInput').value.trim();if(!q)return;await performSearch(q,searchLat||userLat,searchLon||userLon,currentWeather.name||'your area');}
+
+async function performSearch(query,lat,lon,locName){
+  const resultsEl=document.getElementById('searchResults'),aiEl=document.getElementById('searchAiBox');
+  const steps=[`<span class="spin"></span>Searching for <b>${query}</b> near ${locName}…`,`<span class="spin"></span>Finding locations within ${searchRadiusMi} mi…`,`<span class="spin"></span>Mapping results…`];
+  let si=0;resultsEl.innerHTML=`<div class="nores">${steps[0]}</div>`;aiEl.innerHTML=`<span class="spin"></span>Waiting…`;
+  const timer=setInterval(()=>{si=(si+1)%steps.length;const e=resultsEl.querySelector('.nores');if(e)e.innerHTML=steps[si];},3000);
+  clearPlaceMarkers();drawRadiusCircle(lat,lon,searchRadiusMi);
+  let places=await fetchPlaces(query,lat,lon);clearInterval(timer);
+  places=places.filter(p=>p.tags?.name).map(p=>({...p,_dist:distKm(lat,lon,p._lat,p._lon)})).filter(p=>p._dist<=searchRadiusMi*1.61).sort((a,b)=>a._dist-b._dist).slice(0,searchRadiusMi<=2?14:searchRadiusMi<=10?20:30);
+  if(!places.length){resultsEl.innerHTML=`<div class="nores">No "${query}" found within ${searchRadiusMi} mi.<br>Try increasing the radius.</div>`;aiEl.innerHTML=`<span class="ghost">No places found.</span>`;document.getElementById('filterBar').style.display='none';return;}
+  lastPlaces=places;activeFilterWords=[];
+  document.getElementById('filterInput').value='';document.getElementById('filterTags').innerHTML='';document.getElementById('filterCount').textContent='';document.getElementById('filterBar').style.display='block';
+  const bounds=[[userLon,userLat]];resultsEl.innerHTML='';
+  places.forEach((p,i)=>{
+    const t=p.tags||{},name=t.name||'Unnamed',type=friendlyType(t),color=pinColor(t),num=i+1;
+    const dist=p._dist<1?(p._dist*1000).toFixed(0)+' m':(p._dist).toFixed(2)+' km';
+    const addr=t['addr:street']||'',hours=t.opening_hours||'',phone=t.phone||'',web=t.website||'';
+    const el=document.createElement('div');el.style.cssText='width:28px;height:38px;cursor:pointer';
+    el.innerHTML=`<svg width="28" height="38" viewBox="0 0 28 38" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.28))"><path d="M14 0C6.27 0 0 6.27 0 14c0 9.6 14 24 14 24S28 23.6 28 14C28 6.27 21.73 0 14 0z" fill="${color}"/><circle cx="14" cy="14" r="8.5" fill="white"/><text x="14" y="18.5" text-anchor="middle" font-size="${num>9?8:10}" font-weight="700" fill="${color}" font-family="-apple-system,sans-serif">${num}</text></svg>`;
+    const popup=new maplibregl.Popup({offset:[0,-38],closeButton:true}).setHTML(`<b>${name}</b><span class="ptyplabel">${type}</span>${addr?`<div class="pmeta-popup">📍 ${addr}</div>`:''}${hours?`<div class="pmeta-popup">🕐 ${hours}</div>`:''}${phone?`<div class="pmeta-popup">📞 ${phone}</div>`:''}${web?`<div class="pmeta-popup"><a href="${web}" target="_blank" style="color:#1d4ed8">Website ↗</a></div>`:''}`);
+    const marker=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([p._lon,p._lat]).setPopup(popup).addTo(map);
+    placeMarkers.push(marker);bounds.push([p._lon,p._lat]);
+    const card=document.createElement('div');card.className='pcard';
+    card.onclick=()=>{map.flyTo({center:[p._lon,p._lat],zoom:16,duration:600});marker.togglePopup();document.querySelectorAll('.pcard').forEach(c=>c.classList.remove('hi'));card.classList.add('hi');};
+    card.innerHTML=`<div class="ptop"><div class="pname"><span class="pdot" style="background:${color}"></span>${num}. ${name}</div><div class="ptyp">${type}</div></div><div class="pdist">${dist} away</div>${addr?`<div class="pmeta">📍 ${addr}</div>`:''}${hours?`<div class="pmeta">🕐 ${hours}</div>`:''}${phone?`<div class="pmeta">📞 ${phone}</div>`:''}${web?`<div class="pmeta"><a href="${web}" target="_blank" style="color:#1d4ed8;font-size:11px">Website ↗</a></div>`:''}`;
+    resultsEl.appendChild(card);
+  });
+  if(bounds.length>1){const lons=bounds.map(b=>b[0]),lats=bounds.map(b=>b[1]);map.fitBounds([[Math.min(...lons),Math.min(...lats)],[Math.max(...lons),Math.max(...lats)]],{padding:50,maxZoom:15,duration:700});}
+  getActivityAI(places,query,locName);
+}
+
+async function getActivityAI(places,query,locName){
+  const aiEl=document.getElementById('searchAiBox');
+  const top=places.slice(0,6).map((p,i)=>`${i+1}. ${p.tags?.name||'Place'} (${friendlyType(p.tags||{})}, ${p._dist<1?(p._dist*1000).toFixed(0)+'m':(p._dist).toFixed(1)+'km'} away)`).join('\n');
+  const wx=currentWeather;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Helpful local activity advisor. Plain text only, no markdown.',messages:[{role:'user',content:`Location: ${locName}. Weather: ${wx.temp}°F, ${wdesc(wx.code)}, wind ${wx.wind}mph.\nTop "${query}":\n${top}\n2-3 sentences: best pinned place for today's weather and why, one visiting tip.`}]})});
+    const data=await res.json();const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    const names=places.slice(0,6).map(p=>p.tags?.name).filter(Boolean);
+    aiEl.innerHTML=names.length?text.replace(new RegExp(names.map(n=>n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'g'),m=>`<b>${m}</b>`):text;
+  }catch{aiEl.innerHTML=`<b>#1 ${places[0]?.tags?.name||'closest spot'}</b> is your nearest option. Tap any pin for details.`;}
+}
+
+async function runAI(){
+  const btn=document.getElementById('aiBtn'),box=document.getElementById('aiBox');
+  btn.disabled=true;box.innerHTML=`<span class="spin"></span>Analysing…`;
+  const wx=currentWeather,nearby=nearbyList.map(a=>`- ${a.name}: ${a.temp}°F, ${wdesc(a.code)}, score ${a.sc}/100, ~${a.dist}mi`).join('\n');
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'Concise GPS weather travel advisor. Plain text only.',messages:[{role:'user',content:`My location: ${wx.name} — ${wx.temp}°F, ${wdesc(wx.code)}, wind ${wx.wind}mph, humidity ${wx.hum}%.\nNearby cities:\n${nearby}\n3 sentences: best city to travel to and why, travel cautions, one activity for today.`}]})});
+    const data=await res.json();const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    const names=nearbyList.map(a=>a.name.split(',')[0]).filter(Boolean);
+    box.innerHTML=names.length?text.replace(new RegExp(names.join('|'),'g'),m=>`<b>${m}</b>`):text;
+  }catch{box.innerHTML=`<b>${nearbyList[0]?.name||'nearest city'}</b> has the best conditions right now.`;}
+  btn.disabled=false;
+}
+
+/* ══════════════════════════════════
+   LOCATION REVIEWER — localStorage
+══════════════════════════════════ */
+function loadReviews(){try{return JSON.parse(localStorage.getItem('gps_reviews')||'[]');}catch{return[];}}
+function saveReviews(arr){try{localStorage.setItem('gps_reviews',JSON.stringify(arr));}catch{}}
+
+function renderReviews(){
+  const list=document.getElementById('reviewsList');
+  const reviews=loadReviews();
+  if(!reviews.length){list.innerHTML='<div class="no-reviews">No reviews yet.<br>Search for places then add your first review!</div>';return;}
+  list.innerHTML='';
+  reviews.slice().reverse().forEach(r=>{
+    const card=document.createElement('div');card.className='rev-card';
+    card.innerHTML=`<div class="rev-card-top"><div class="rev-place-name">${r.name}</div><div class="rev-stars">${starsHtml(r.stars||3)}</div></div><div class="rev-meta">${r.type||'place'} ${r.address?'· '+r.address:''} · ${new Date(r.ts).toLocaleDateString()}</div><div class="rev-text">${r.review||'<em style="color:#9ca3af">No review text</em>'}</div>${r.tags?.length?`<div class="rev-tags">${r.tags.map(t=>`<span class="rev-tag">${t}</span>`).join('')}</div>`:''}${r.website?`<div style="margin-top:5px"><a href="${r.website}" target="_blank" style="font-size:11px;color:#1d4ed8">Website ↗</a></div>`:''}<div class="rev-actions"><button class="rev-act-btn" onclick="editReview('${r.id}')">✏ Edit</button><button class="rev-act-btn del" onclick="deleteReview('${r.id}')">✕ Delete</button></div>`;
+    list.appendChild(card);
+  });
+}
+
+function openModal(prefill){
+  editingId=null;formTags=[];formStars=3;
+  document.getElementById('fName').value=prefill?.name||'';
+  document.getElementById('fType').value=prefill?.type||'';
+  document.getElementById('fAddr').value=prefill?.address||'';
+  document.getElementById('fReview').value='';
+  document.getElementById('fWeb').value='';
+  document.getElementById('fTags').innerHTML='';
+  document.getElementById('fTagInput').value='';
+  document.getElementById('modalTitle').textContent='Add location review';
+  setStar(3);
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function editReview(id){
+  const reviews=loadReviews();const r=reviews.find(x=>x.id===id);if(!r)return;
+  editingId=id;formTags=r.tags||[];formStars=r.stars||3;
+  document.getElementById('fName').value=r.name||'';
+  document.getElementById('fType').value=r.type||'';
+  document.getElementById('fAddr').value=r.address||'';
+  document.getElementById('fReview').value=r.review||'';
+  document.getElementById('fWeb').value=r.website||'';
+  document.getElementById('fTags').innerHTML='';
+  formTags.forEach(t=>renderTagChip(t));
+  document.getElementById('fTagInput').value='';
+  document.getElementById('modalTitle').textContent='Edit location review';
+  setStar(formStars);
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function deleteReview(id){
+  if(!confirm('Delete this review?'))return;
+  const reviews=loadReviews().filter(r=>r.id!==id);saveReviews(reviews);renderReviews();
+}
+
+function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
+
+function setStar(n){
+  formStars=n;
+  document.querySelectorAll('.star-btn').forEach(b=>{b.classList.toggle('lit',parseInt(b.dataset.v)<=n);});
+}
+
+function addTag(){
+  const input=document.getElementById('fTagInput');
+  const val=input.value.trim().toLowerCase();
+  if(!val||formTags.includes(val))return;
+  formTags.push(val);renderTagChip(val);input.value='';
+}
+
+function renderTagChip(tag){
+  const chip=document.createElement('span');chip.className='tag-chip';chip.textContent=tag;
+  chip.onclick=()=>{formTags=formTags.filter(t=>t!==tag);chip.remove();};
+  document.getElementById('fTags').appendChild(chip);
+}
+
+function saveReview(){
+  const name=document.getElementById('fName').value.trim();
+  if(!name){alert('Place name is required.');return;}
+  const reviews=loadReviews();
+  const entry={id:editingId||('r'+Date.now()),name,type:document.getElementById('fType').value.trim(),address:document.getElementById('fAddr').value.trim(),review:document.getElementById('fReview').value.trim(),website:document.getElementById('fWeb').value.trim(),stars:formStars,tags:[...formTags],ts:editingId?reviews.find(r=>r.id===editingId)?.ts||Date.now():Date.now()};
+  if(editingId){const idx=reviews.findIndex(r=>r.id===editingId);if(idx>=0)reviews[idx]=entry;else reviews.push(entry);}else{reviews.push(entry);}
+  saveReviews(reviews);closeModal();renderReviews();
+  // switch to reviews tab
+  document.querySelectorAll('.rtab')[1].click();
+}
+
+/* ── boot ── */
+if(navigator.geolocation){
+  navigator.geolocation.getCurrentPosition(
+    p=>{userLat=p.coords.latitude;userLon=p.coords.longitude;startTracking();},
+    ()=>{setStatus('Location denied — defaulting to San Jose, CA','');userLat=37.3382;userLon=-121.8863;startTracking();},
+    {enableHighAccuracy:true,timeout:10000}
+  );
+}else{
+  setStatus('Geolocation unavailable — defaulting to San Jose, CA','err');
+  userLat=37.3382;userLon=-121.8863;startTracking();
+}
+</script>
+</body>
+</html>
